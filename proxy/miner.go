@@ -17,6 +17,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 
 	work := s.currentWork()
 	header := work.BuildHeader(cs.extraNonce1, extraNonce2)
+
 	ok, err := equihash.Verify(200, 9, header, util.HexToBytes(solution)[3:])
 	if err != nil {
 		fmt.Println(err)
@@ -24,6 +25,13 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	if ok {
 		header = append(header, util.HexToBytes(solution)...)
 		fmt.Println(util.BytesToHex(header))
+
+		// headerHashed = sha256.Sum256(sha256.Sum256(header))
+		// fmt.Println(util.BytesToHex(headerHashed))
+
+		header = append(header, util.HexToBytes("01")...)
+		header = append(header, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
+
 		ok, err := s.rpc().SubmitBlock(util.BytesToHex(header))
 		if err != nil {
 			fmt.Println(err)
