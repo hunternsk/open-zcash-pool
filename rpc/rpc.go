@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -45,13 +46,13 @@ func (r *RPCClient) GetBlockTemplate(reply interface{}) error {
 	return err
 }
 
-func (r *RPCClient) SubmitBlock(header string) (bool, error) {
+func (r *RPCClient) SubmitBlock(header string) (interface{}, error) {
 	rpcResp, err := r.doPost(r.Url, "submitblock", []string{header})
 	if err != nil {
 		return false, err
 	}
-	var reply bool
-	err = json.Unmarshal(*rpcResp.Result, &reply)
+	var reply interface{}
+	err = json.Unmarshal(*rpcResp.Result, reply)
 	return reply, err
 }
 
@@ -70,8 +71,9 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := r.client.Do(req)
-	// fmt.Println("4", resp)
+
 	if err != nil {
+		// fmt.Println("1", err)
 		r.markSick()
 		return nil, err
 	}
@@ -81,13 +83,21 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 	err = json.NewDecoder(resp.Body).Decode(&rpcResp)
 	// fmt.Println("5", rpcResp)
 	if err != nil {
+		// fmt.Println("2", err)
 		r.markSick()
 		return nil, err
 	}
 	if rpcResp.Error != nil {
+		// fmt.Println("3", rpcResp.Error)
 		r.markSick()
 		return nil, errors.New(rpcResp.Error["message"].(string))
 	}
+
+	if method == "submitblock" {
+		fmt.Println("4", util.BytesToHex(*rpcResp.Result))
+		fmt.Println("4", rpcResp.Error)
+	}
+
 	return rpcResp, err
 }
 

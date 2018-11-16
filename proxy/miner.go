@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 
@@ -26,20 +27,21 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		header = append(header, util.HexToBytes(solution)...)
 		fmt.Println(util.BytesToHex(header))
 
-		// headerHashed = sha256.Sum256(sha256.Sum256(header))
-		// fmt.Println(util.BytesToHex(headerHashed))
+		headerHashed := sha256.Sum256(header)
+		headerHashed = sha256.Sum256(headerHashed[:])
+		fmt.Println(util.BytesToHex(headerHashed[:]))
 
 		header = append(header, util.HexToBytes("01")...)
 		header = append(header, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
 
-		ok, err := s.rpc().SubmitBlock(util.BytesToHex(header))
+		_, err := s.rpc().SubmitBlock(util.BytesToHex(header))
 		if err != nil {
 			fmt.Println(err)
 			log.Printf("Block submission failure")
 			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
-		} else if !ok {
-			log.Printf("Block rejected")
-			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+			// } else if !ok {
+			// log.Printf("Block rejected")
+			// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
 		} else {
 			s.fetchWork()
 			// exist, err := s.backend.WriteBlock(login, id, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
