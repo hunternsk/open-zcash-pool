@@ -53,7 +53,9 @@ type Work struct {
 	ReservedField      string
 	Time               string
 	Bits               string
-	Difficulty         big.Int
+	Target             string
+	Height             int
+	Difficulty         *big.Int
 	CleanJobs          bool
 	Template           *BlockTemplate
 	// Nonce              string
@@ -88,6 +90,8 @@ func (s *ProxyServer) fetchWork() {
 	mt := merkleTree.NewMerkleTree(mtBottomRow)
 	mtr := mt.MerkleRoot()
 
+	target, _ := new(big.Int).SetString(reply.Target, 16)
+
 	newWork := Work{
 		JobId:              "1",
 		Version:            util.BytesToHex(util.PackUInt32LE(reply.Version)),
@@ -96,7 +100,9 @@ func (s *ProxyServer) fetchWork() {
 		ReservedField:      "0000000000000000000000000000000000000000000000000000000000000000",
 		Time:               util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
 		Bits:               util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
-		Difficulty:         new(big.Int).Div(util.PowLimitTest, new(big.Int).SetString(reply.Bits, 16)),
+		Target:             reply.Target,
+		Height:             reply.Height,
+		Difficulty:         new(big.Int).Div(util.PowLimitTest, target),
 		CleanJobs:          true,
 		Template:           &reply,
 	}

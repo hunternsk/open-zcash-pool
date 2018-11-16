@@ -21,49 +21,56 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 
 	ok, err := equihash.Verify(200, 9, header, util.HexToBytes(solution)[3:])
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("equihashVerify error: ", err)
 	}
 	if ok {
 		header = append(header, util.HexToBytes(solution)...)
-		fmt.Println(util.BytesToHex(header))
+		// fmt.Println(util.BytesToHex(header))
 
-		if TargetCompare(header, work.Bits) {
-			fmt.Println("Block header higher than target threshold")
-			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
-		}
+		var blockHex []byte = nil
 
-		if !DiffCompare(header) {
-			fmt.Println("Difff very bad")
-			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
-		}
+		if HeaderLeTarget(header, work.Target) {
+			fmt.Println("\n\n\n\nHEADER LOWER THAN TARGET!!!!!!!!!1111111111\n\n\n\n")
 
-		blockHex := append(header, util.HexToBytes("01")...)
-		blockHex = append(blockHex, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
-
-		_, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
-
-		if err != nil {
-			fmt.Println(err)
-			log.Printf("Block submission failure")
-			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
-			// } else if !ok {
-			// log.Printf("Block rejected")
-			// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+			blockHex = append(header, util.HexToBytes("01")...)
+			blockHex = append(blockHex, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
 		} else {
-			s.fetchWork()
-			// exist, err := s.backend.WriteBlock(login, id, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
-			// if exist {
-			// 	return true, false
-			// }
-			// if err != nil {
-			// 	log.Println("Failed to insert block candidate into backend:", err)
-			// } else {
-			// 	log.Printf("Inserted block %v to backend", h.height)
-			// }
-			log.Printf("Block found by miner %v@%v at height", cs.login, cs.ip)
-			return true, nil
+			if !SdiffDivDiffGe1(header, work) {
+				fmt.Println("\n\n\nLow difficulty share\n\n\n")
+				return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
+			}
 		}
+
+		if blockHex != nil {
+			_, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
+			if err != nil {
+				fmt.Println("submitBlockError: ", err)
+				// log.Printf("Block submission failure")
+				return false, &ErrorReply{Code: 23, Message: "Suubmit block error"}
+				// } else if !ok {
+				// log.Printf("Block rejected")
+				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+			} else {
+				s.fetchWork()
+				// exist, err := s.backend.WriteBlock(login, id, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
+				// if exist {
+				// 	return true, false
+				// }
+				// if err != nil {
+				// 	log.Println("Failed to insert block candidate into backend:", err)
+				// } else {
+				// 	log.Printf("Inserted block %v to backend", h.height)
+				// }
+				fmt.Println("Block found by miner %v@%v at height", cs.login, cs.ip)
+				return true, nil
+			}
+		}
+
+		log.Printf(" Share found by miner %v@%v at height %v", cs.login, cs.ip, work.Height)
+		return true, nil
+
 	} else {
+		fmt.Println("Equihash verify not ok")
 		// exist, err := s.backend.WriteShare(login, id, params, shareDiff, h.height, s.hashrateExpiration)
 		// if exist {
 		// 	return true, false
@@ -71,7 +78,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		// if err != nil {
 		// 	log.Println("Failed to insert share data into backend:", err)
 		// }
-		return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
 	}
 	// shareExists, validShare, errorReply := s.processShare(cs, id, t, params)
 	// ok := s.policy.ApplySharePolicy(cs.ip, !shareExists && validShare)
@@ -115,21 +122,22 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 // 	return ShareOK, ""
 // }
 
-func DiffCompare(header []byte) {
+func SdiffDivDiffGe1(header []byte, work *Work) bool {
 	headerHashed := util.Sha256d(header)
 
-	headerBig := new(big.Int).SetBytes(headerHashed[:])
-	shareDifficulty := new(big.Int).Div(util.PowLimitTest, headerBig)
+	headerBig := new(big.Int).SetBytes(util.ReverseBuffer(headerHashed[:]))
+	shareDifficulty := new(big.Rat).SetFrac(util.PowLimitTest, headerBig)
+	ratCmp := new(big.Rat).Quo(shareDifficulty, new(big.Rat).SetInt64(32)).Cmp(new(big.Rat).SetInt64(1))
+	diffOk := ratCmp >= 0
 
-	diffOk := new(big.Rat).SetFrac(shareDifficulty, work.Difficulty).Cmp(big.NewRat(1, 1)) < 0
-	fmt.Println(diffOk)
 	return diffOk
 }
 
-func TargetCompare(header []byte, target string) {
+func HeaderLeTarget(header []byte, target string) bool {
 	headerHashed := util.Sha256d(header)
 
-	x := new(big.Int).SetBytes(headerHashed[:])
-	y := new(big.Int).SetString(target, 16)
-	return x.Cmp(y) <= 0
+	x := new(big.Int).SetBytes(util.ReverseBuffer(headerHashed[:]))
+	y, _ := new(big.Int).SetString(target, 16)
+	bol := x.Cmp(y) <= 0
+	return bol
 }
