@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -48,6 +49,7 @@ func GetTargetHex(diff int64) string {
 	difficulty := big.NewInt(diff)
 	bytes := new(big.Int).Div(PowLimitTest, difficulty).Bytes()
 	copy(result[len(result)-len(bytes):], bytes)
+	fmt.Println("TargetHex:", result, BytesToHex(result[:]))
 	return BytesToHex(result[:])
 	// fmt.Println("------------------")
 	// difficulty := big.NewInt(diff * 8192)

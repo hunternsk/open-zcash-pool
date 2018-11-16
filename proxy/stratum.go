@@ -136,7 +136,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		return cs.pushNewJob(&reply)
 	case "mining.submit":
 		reply, errReply = s.handleTCPSubmitRPC(cs, params, req.Worker)
-		fmt.Println("mining.submit", params, reply, errReply)
+		// fmt.Println("mining.submit", params, reply, errReply)
 	case "mining.extranonce.subscribe":
 		errReply = &ErrorReply{Code: 20, Message: "Not supported."}
 		fmt.Println("mining.extranonce.subscribe", params, reply, errReply)

@@ -47,6 +47,7 @@ func (r *RPCClient) GetBlockTemplate(reply interface{}) error {
 }
 
 func (r *RPCClient) SubmitBlock(header string) (interface{}, error) {
+	fmt.Println("blockHex:", header)
 	rpcResp, err := r.doPost(r.Url, "submitblock", []string{header})
 	if err != nil {
 		return false, err
