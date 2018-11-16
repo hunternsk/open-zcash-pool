@@ -1,6 +1,7 @@
 package util
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -15,10 +16,10 @@ import (
 
 var Ether = math.BigPow(10, 18)
 var Shannon = math.BigPow(10, 9)
+var PowLimitMain = new(big.Int).Sub(math.BigPow(2, 243), big.NewInt(1))
+var PowLimitTest = new(big.Int).Sub(math.BigPow(2, 251), big.NewInt(1))
 
 var pow256 = math.BigPow(2, 256)
-var powLimitMain = new(big.Int).Sub(math.BigPow(2, 243), big.NewInt(1))
-var powLimitTest = new(big.Int).Sub(math.BigPow(2, 251), big.NewInt(1))
 var addressPattern = regexp.MustCompile("^0x[0-9a-fA-F]{40}$")
 var tAddressPattern = regexp.MustCompile("^t[0-9a-zA-Z]{34}$")
 var zeroHash = regexp.MustCompile("^0?x?0+$")
@@ -45,12 +46,12 @@ func MakeTimestamp() int64 {
 func GetTargetHex(diff int64) string {
 	var result [32]uint8
 	difficulty := big.NewInt(diff)
-	bytes := new(big.Int).Div(powLimitTest, difficulty).Bytes()
+	bytes := new(big.Int).Div(PowLimitTest, difficulty).Bytes()
 	copy(result[len(result)-len(bytes):], bytes)
 	return BytesToHex(result[:])
 	// fmt.Println("------------------")
 	// difficulty := big.NewInt(diff * 8192)
-	// fmt.Println(diff, difficulty, powLimitTest)
+	// fmt.Println(diff, difficulty, PowLimitTest)
 	// adjPow := BytesToHex(new(big.Int).Div(powLimitTest, difficulty).Bytes())
 	// fmt.Println(adjPow, len(adjPow), 64-len(adjPow))
 	// zeroPad := ""
@@ -197,6 +198,11 @@ func HexToUInt32(s string) uint32 {
 	}
 
 	return binary.BigEndian.Uint32(data)
+}
+
+func Sha256d(decrypted []byte) [32]byte {
+	round1 := sha256.Sum256(decrypted)
+	return sha256.Sum256(round1[:])
 }
 
 // func HexToInt

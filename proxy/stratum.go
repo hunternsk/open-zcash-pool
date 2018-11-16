@@ -124,6 +124,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		cs.sendTCPResult(req.Id, reply)
+
 		// TODO set_target
 		var d = []interface{}{s.diff}
 		cs.setTarget(&d)

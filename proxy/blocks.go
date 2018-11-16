@@ -53,6 +53,7 @@ type Work struct {
 	ReservedField      string
 	Time               string
 	Bits               string
+	Difficulty         big.Int
 	CleanJobs          bool
 	Template           *BlockTemplate
 	// Nonce              string
@@ -95,6 +96,7 @@ func (s *ProxyServer) fetchWork() {
 		ReservedField:      "0000000000000000000000000000000000000000000000000000000000000000",
 		Time:               util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
 		Bits:               util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
+		Difficulty:         new(big.Int).Div(util.PowLimitTest, new(big.Int).SetString(reply.Bits, 16)),
 		CleanJobs:          true,
 		Template:           &reply,
 	}

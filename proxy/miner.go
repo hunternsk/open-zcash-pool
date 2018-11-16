@@ -1,9 +1,9 @@
 package proxy
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"log"
+	"math/big"
 
 	"github.com/jkkgbe/open-zcash-pool/equihash"
 	"github.com/jkkgbe/open-zcash-pool/util"
@@ -27,14 +27,21 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		header = append(header, util.HexToBytes(solution)...)
 		fmt.Println(util.BytesToHex(header))
 
-		headerHashed := sha256.Sum256(header)
-		headerHashed = sha256.Sum256(headerHashed[:])
-		fmt.Println(util.BytesToHex(headerHashed[:]))
+		if TargetCompare(header, work.Bits) {
+			fmt.Println("Block header higher than target threshold")
+			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+		}
 
-		header = append(header, util.HexToBytes("01")...)
-		header = append(header, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
+		if !DiffCompare(header) {
+			fmt.Println("Difff very bad")
+			return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+		}
 
-		_, err := s.rpc().SubmitBlock(util.BytesToHex(header))
+		blockHex := append(header, util.HexToBytes("01")...)
+		blockHex = append(blockHex, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
+
+		_, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
+
 		if err != nil {
 			fmt.Println(err)
 			log.Printf("Block submission failure")
@@ -108,10 +115,21 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 // 	return ShareOK, ""
 // }
 
-// func TargetCompare(a []byte, b []byte) {
-// 	x := big.NewInt(0)
-// 	x.SetBytes(a[:])
-// 	y := big.NewInt(0)
-// 	y.SetBytes(b[:])
-// 	return a.Cmp(b)
-// }
+func DiffCompare(header []byte) {
+	headerHashed := util.Sha256d(header)
+
+	headerBig := new(big.Int).SetBytes(headerHashed[:])
+	shareDifficulty := new(big.Int).Div(util.PowLimitTest, headerBig)
+
+	diffOk := new(big.Rat).SetFrac(shareDifficulty, work.Difficulty).Cmp(big.NewRat(1, 1)) < 0
+	fmt.Println(diffOk)
+	return diffOk
+}
+
+func TargetCompare(header []byte, target string) {
+	headerHashed := util.Sha256d(header)
+
+	x := new(big.Int).SetBytes(headerHashed[:])
+	y := new(big.Int).SetString(target, 16)
+	return x.Cmp(y) <= 0
+}
