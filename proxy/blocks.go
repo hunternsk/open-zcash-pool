@@ -86,9 +86,15 @@ func (s *ProxyServer) fetchWork() {
 		copy(txHashes[i+1][:], util.HexToBytes(transaction.Hash)[:32])
 	}
 
-	mtBottomRow := txHashes
-	mt := merkleTree.NewMerkleTree(mtBottomRow)
-	mtr := mt.MerkleRoot()
+	var mtr [32]byte
+
+	if len(txHashes) != 1 {
+		mtBottomRow := txHashes
+		mt := merkleTree.NewMerkleTree(mtBottomRow)
+		mtr = mt.MerkleRoot()
+	} else {
+		copy(mtr[:], util.HexToBytes(reply.CoinbaseTxn.Hash[:]))
+	}
 
 	target, _ := new(big.Int).SetString(reply.Target, 16)
 
