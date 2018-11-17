@@ -49,23 +49,30 @@ func (r *RPCClient) GetBlockTemplate(reply interface{}) error {
 func (r *RPCClient) SubmitBlock(header string) (interface{}, error) {
 	fmt.Println("blockHex:", header)
 	rpcResp, err := r.doPost(r.Url, "submitblock", []string{header})
+
 	if err != nil {
 		return false, err
 	}
+
 	var reply interface{}
-	err = json.Unmarshal(*rpcResp.Result, reply)
+	if rpcResp.Result != nil {
+		err = json.Unmarshal(*rpcResp.Result, reply)
+	}
+
 	return reply, err
 }
 
 func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSONRpcResp, error) {
 	jsonReq := map[string]interface{}{"jsonrpc": "2.0", "method": method, "params": params, "id": 0}
-	// fmt.Println("1", jsonReq)
 
 	data, _ := json.Marshal(jsonReq)
-	// fmt.Println("2", data)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
-	// fmt.Println("3", req)
+
+	if err != nil {
+		r.markSick()
+		return nil, err
+	}
 
 	req.Header.Set("Content-Length", (string)(len(data)))
 	req.Header.Set("Content-Type", "application/json")
@@ -74,29 +81,22 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 	resp, err := r.client.Do(req)
 
 	if err != nil {
-		// fmt.Println("1", err)
 		r.markSick()
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var rpcResp *JSONRpcResp
+
 	err = json.NewDecoder(resp.Body).Decode(&rpcResp)
-	// fmt.Println("5", rpcResp)
+
 	if err != nil {
-		// fmt.Println("2", err)
 		r.markSick()
 		return nil, err
 	}
 	if rpcResp.Error != nil {
-		// fmt.Println("3", rpcResp.Error)
 		r.markSick()
 		return nil, errors.New(rpcResp.Error["message"].(string))
-	}
-
-	if method == "submitblock" {
-		fmt.Println("4", util.BytesToHex(*rpcResp.Result))
-		fmt.Println("4", rpcResp.Error)
 	}
 
 	return rpcResp, err

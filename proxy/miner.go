@@ -30,23 +30,23 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		var blockHex []byte = nil
 
 		if HeaderLeTarget(header, work.Target) {
-			fmt.Println("\n\n\n\nHEADER LOWER THAN TARGET!!!!!!!!!1111111111\n\n\n\n")
+			log.Println("Found block candidate")
 
 			blockHex = append(header, util.HexToBytes("01")...)
 			blockHex = append(blockHex, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
 		} else {
 			if !SdiffDivDiffGe1(header, work) {
-				fmt.Println("\n\n\nLow difficulty share\n\n\n")
+				fmt.Println("Low difficulty share")
 				return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
 			}
 		}
 
 		if blockHex != nil {
-			_, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
+			reply, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
-				fmt.Println("submitBlockError: ", err)
+				fmt.Println("submitBlockError: ", err, reply)
 				// log.Printf("Block submission failure")
-				return false, &ErrorReply{Code: 23, Message: "Suubmit block error"}
+				return false, &ErrorReply{Code: 23, Message: "Submit block error"}
 				// } else if !ok {
 				// log.Printf("Block rejected")
 				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
@@ -61,7 +61,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				// } else {
 				// 	log.Printf("Inserted block %v to backend", h.height)
 				// }
-				fmt.Println("Block found by miner %v@%v at height", cs.login, cs.ip)
+				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				return true, nil
 			}
 		}
