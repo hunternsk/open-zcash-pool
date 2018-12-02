@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jkkgbe/open-zcash-pool/merkleTree"
+	"github.com/jkkgbe/open-zcash-pool/transaction"
 	"github.com/jkkgbe/open-zcash-pool/util"
 )
 
@@ -20,13 +21,13 @@ type heightDiffPair struct {
 type Transaction struct {
 	Data string `json:"data"`
 	Hash string `json:"hash"`
-	Fee  int    `json:"fee"`
+	Fee  int64  `json:"fee"`
 }
 
 type CoinbaseTxn struct {
 	Data           string `json:"data"`
 	Hash           string `json:"hash"`
-	FoundersReward int    `json:"foundersreward"`
+	FoundersReward int64  `json:"foundersreward"`
 }
 
 type BlockTemplate struct {
@@ -60,10 +61,7 @@ type Work struct {
 	Difficulty           *big.Int
 	CleanJobs            bool
 	Template             *BlockTemplate
-	// Nonce              string
-	// SolutionSize       [3]byte
-	// Solution           [1344]byte
-	// Header             [4 + 32 + 32 + 32 + 4 + 4 + 32 + 3 + 1344]byte
+	GeneratedCoinbase    []byte
 }
 
 func (s *ProxyServer) fetchWork() {
@@ -80,31 +78,37 @@ func (s *ProxyServer) fetchWork() {
 		return
 	}
 
-	// generatedTxHash := CreateRawTransaction(inputs, outputs).TxHash()
+	var feeReward int64 = 0
+	for _, transaction := range reply.Transactions {
+		feeReward += transaction.Fee
+	}
+
+	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(reply.Height, "tmGoHHqgsCRuEna9YQX9zKp9ujeqGLMLEYi", reply.CoinbaseTxn.FoundersReward, feeReward)
+
 	txHashes := make([][32]byte, len(reply.Transactions)+1)
-	// txHashes[0] = util.ReverseBuffer(generatedTxHash)
-	copy(txHashes[0][:], util.HexToBytes(reply.CoinbaseTxn.Hash)[:32])
+	log.Println("CBTX HASH: ", util.BytesToHex(coinbaseHash[:]))
+	copy(txHashes[0][:], coinbaseHash[:])
 	for i, transaction := range reply.Transactions {
-		copy(txHashes[i+1][:], util.HexToBytes(transaction.Hash)[:32])
+		log.Println("TX HASH: ", transaction.Hash)
+		copy(txHashes[i+1][:], util.ReverseBuffer(util.HexToBytes(transaction.Hash)))
 	}
 
 	var mtr [32]byte
 
-	if len(txHashes) != 1 {
-		mtBottomRow := txHashes
-		mt := merkleTree.NewMerkleTree(mtBottomRow)
+	if len(txHashes) > 1 {
+		mt := merkleTree.NewMerkleTree(txHashes)
 		mtr = mt.MerkleRoot()
 	} else {
-		copy(mtr[:], util.HexToBytes(reply.CoinbaseTxn.Hash[:]))
+		copy(mtr[:], txHashes[0][:])
 	}
 
 	target, _ := new(big.Int).SetString(reply.Target, 16)
-
+	log.Println("MTR: ", util.BytesToHex(mtr[:]))
 	newWork := Work{
 		JobId:                util.BytesToHex([]byte(time.Now().String())),
 		Version:              util.BytesToHex(util.PackUInt32LE(reply.Version)),
 		PrevHashReversed:     util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.PrevBlockHash))),
-		MerkleRootReversed:   util.BytesToHex(util.ReverseBuffer(mtr[:])),
+		MerkleRootReversed:   util.BytesToHex(mtr[:]),
 		FinalSaplingRootHash: util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.FinalSaplingRootHash))),
 		Time:                 util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
 		Bits:                 util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
@@ -113,7 +117,9 @@ func (s *ProxyServer) fetchWork() {
 		Difficulty:           new(big.Int).Div(util.PowLimitTest, target),
 		CleanJobs:            true,
 		Template:             &reply,
+		GeneratedCoinbase:    coinbaseTxn,
 	}
+	log.Println("MTRR: ", newWork.MerkleRootReversed)
 
 	// // Copy job backlog and add current one
 	// newBlock.headers[reply[0]] = heightDiffPair{

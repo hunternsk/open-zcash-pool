@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
 
 	"github.com/jkkgbe/open-zcash-pool/equihash"
 	"github.com/jkkgbe/open-zcash-pool/util"
@@ -25,15 +26,24 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	}
 	if ok {
 		header = append(header, util.HexToBytes(solution)...)
-		// fmt.Println(util.BytesToHex(header))
 
 		var blockHex []byte = nil
 
 		if HeaderLeTarget(header, work.Target) {
 			log.Println("Found block candidate")
 
-			blockHex = append(header, util.HexToBytes("01")...)
-			blockHex = append(blockHex, util.HexToBytes(work.Template.CoinbaseTxn.Data)...)
+			txCountAsHex := strconv.FormatInt(int64(len(work.Template.Transactions)+1), 16)
+
+			if len(txCountAsHex)%2 == 1 {
+				txCountAsHex = "0" + txCountAsHex
+			}
+
+			blockHex = append(header, util.HexToBytes(txCountAsHex)...)
+			blockHex = append(blockHex, work.GeneratedCoinbase...)
+
+			for _, transaction := range work.Template.Transactions {
+				blockHex = append(blockHex, util.HexToBytes(transaction.Data)...)
+			}
 		} else {
 			if !SdiffDivDiffGe1(header, work) {
 				fmt.Println("Low difficulty share")
