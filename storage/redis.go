@@ -96,24 +96,6 @@ func (r *RedisClient) BgSave() (string, error) {
 	return r.client.BgSave().Result()
 }
 
-// Always returns list of addresses. If Redis fails it will return empty list.
-func (r *RedisClient) GetBlacklist() ([]string, error) {
-	cmd := r.client.SMembers(r.formatKey("blacklist"))
-	if cmd.Err() != nil {
-		return []string{}, cmd.Err()
-	}
-	return cmd.Val(), nil
-}
-
-// Always returns list of IPs. If Redis fails it will return empty list.
-func (r *RedisClient) GetWhitelist() ([]string, error) {
-	cmd := r.client.SMembers(r.formatKey("whitelist"))
-	if cmd.Err() != nil {
-		return []string{}, cmd.Err()
-	}
-	return cmd.Val(), nil
-}
-
 func (r *RedisClient) WriteNodeState(id string, height uint64, diff *big.Int) error {
 	tx := r.client.Multi()
 	defer tx.Close()

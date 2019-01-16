@@ -91,7 +91,6 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
 	}
 	// shareExists, validShare, errorReply := s.processShare(cs, id, t, params)
-	// ok := s.policy.ApplySharePolicy(cs.ip, !shareExists && validShare)
 
 	// if !validShare {
 	// 	log.Printf("Invalid share from %s@%s", cs.login, cs.ip)

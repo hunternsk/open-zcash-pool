@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"github.com/jkkgbe/open-zcash-pool/policy"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
 
@@ -34,8 +33,6 @@ type Proxy struct {
 	Difficulty           int64  `json:"difficulty"`
 	StateUpdateInterval  string `json:"stateUpdateInterval"`
 	HashrateExpiration   string `json:"hashrateExpiration"`
-
-	Policy policy.Config `json:"policy"`
 
 	MaxFails    int64 `json:"maxFails"`
 	HealthCheck bool  `json:"healthCheck"`

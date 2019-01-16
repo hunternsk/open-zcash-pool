@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jkkgbe/open-zcash-pool/policy"
 	"github.com/jkkgbe/open-zcash-pool/rpc"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 	"github.com/jkkgbe/open-zcash-pool/util"
@@ -22,7 +21,6 @@ type ProxyServer struct {
 	upstreams          []*rpc.RPCClient
 	backend            *storage.RedisClient
 	diff               string
-	policy             *policy.PolicyServer
 	hashrateExpiration time.Duration
 	failsCount         int64
 
@@ -49,9 +47,8 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 	if len(cfg.Name) == 0 {
 		log.Fatal("You must set instance name")
 	}
-	policy := policy.Start(&cfg.Proxy.Policy, backend)
 
-	proxy := &ProxyServer{config: cfg, backend: backend, policy: policy}
+	proxy := &ProxyServer{config: cfg, backend: backend}
 	proxy.diff = util.GetTargetHex(cfg.Proxy.Difficulty)
 
 	proxy.upstreams = make([]*rpc.RPCClient, len(cfg.Upstream))

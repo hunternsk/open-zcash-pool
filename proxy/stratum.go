@@ -43,10 +43,6 @@ func (s *ProxyServer) ListenTCP() {
 
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if s.policy.IsBanned(ip) || !s.policy.ApplyLimitPolicy(ip) {
-			conn.Close()
-			continue
-		}
 		n += 1
 		cs := &Session{conn: conn, ip: ip}
 
@@ -72,7 +68,6 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 		if isPrefix {
 			fmt.Println(string(data))
 			log.Printf("Socket flood detected from %s", cs.ip)
-			s.policy.BanClient(cs.ip)
 			return err
 		} else if err == io.EOF {
 			log.Printf("Client %s disconnected", cs.ip)
@@ -87,7 +82,6 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 			var req StratumReq
 			err = json.Unmarshal(data, &req)
 			if err != nil {
-				s.policy.ApplyMalformedPolicy(cs.ip)
 				log.Printf("Malformed stratum request from %s: %v", cs.ip, err)
 				return err
 			}
