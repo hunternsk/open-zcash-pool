@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/jkkgbe/open-zcash-pool/api"
 	"github.com/jkkgbe/open-zcash-pool/proxy"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
@@ -24,6 +25,11 @@ func startProxy() {
 	proxy.NewProxy(&cfg, backend)
 	// s := proxy.NewProxy(&cfg, backend)
 	// s.Start()
+}
+
+func startApi() {
+	s := api.NewApiServer(&cfg.Api, backend)
+	s.Start()
 }
 
 func readConfig(cfg *proxy.Config) {
@@ -64,6 +70,9 @@ func main() {
 
 	if cfg.Proxy.Enabled {
 		go startProxy()
+	}
+	if cfg.Api.Enabled {
+		go startApi()
 	}
 
 	quit := make(chan bool)

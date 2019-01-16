@@ -1,14 +1,16 @@
 package proxy
 
 import (
+	"github.com/jkkgbe/open-zcash-pool/api"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
 
 type Config struct {
-	Name                  string     `json:"name"`
-	Proxy                 Proxy      `json:"proxy"`
-	Upstream              []Upstream `json:"upstream"`
-	UpstreamCheckInterval string     `json:"upstreamCheckInterval"`
+	Name                  string        `json:"name"`
+	Proxy                 Proxy         `json:"proxy"`
+	Api                   api.ApiConfig `json:"api"`
+	Upstream              []Upstream    `json:"upstream"`
+	UpstreamCheckInterval string        `json:"upstreamCheckInterval"`
 
 	Threads int `json:"threads"`
 
