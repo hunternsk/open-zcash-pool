@@ -13,11 +13,11 @@ import (
 	zecl "github.com/jkkgbe/zcash-light"
 )
 
-func BuildCoinbaseTxn(blockHeight int, poolAddress string, foundersRewardSatoshi int64, feeReward int64) ([]byte, chainhash.Hash) {
+func BuildCoinbaseTxn(blockHeight uint64, poolAddress string, foundersRewardSatoshi int64, feeReward int64) ([]byte, chainhash.Hash) {
 	// build input
 	// blockheight script
 
-	blockHeightAsHex := strconv.FormatInt(int64(blockHeight), 16)
+	blockHeightAsHex := strconv.FormatUint(blockHeight, 16)
 
 	var blockHeightSerial string
 	if len(blockHeightAsHex)%2 != 0 {
@@ -26,7 +26,7 @@ func BuildCoinbaseTxn(blockHeight int, poolAddress string, foundersRewardSatoshi
 		blockHeightSerial = blockHeightAsHex
 	}
 
-	height := math.Ceil(float64(len(strconv.FormatInt(int64(blockHeight<<1), 2))) / 8)
+	height := math.Ceil(float64(len(strconv.FormatUint(blockHeight<<1, 2))) / 8)
 	lengthDiff := len(blockHeightSerial)/2 - int(height)
 
 	for i := 0; i < lengthDiff; i++ {

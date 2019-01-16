@@ -45,7 +45,7 @@ type BlockTemplate struct {
 	SizeLimit            int           `json:"sizelimit"`
 	CurTime              uint32        `json:"curtime"`
 	Bits                 string        `json:"bits"`
-	Height               int           `json:"height"`
+	Height               uint64        `json:"height"`
 }
 
 type Work struct {
@@ -57,7 +57,7 @@ type Work struct {
 	Time                 string
 	Bits                 string
 	Target               string
-	Height               int
+	Height               uint64
 	Difficulty           *big.Int
 	CleanJobs            bool
 	Template             *BlockTemplate
