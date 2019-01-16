@@ -23,7 +23,6 @@ type ApiConfig struct {
 	HashrateWindow       string `json:"hashrateWindow"`
 	HashrateLargeWindow  string `json:"hashrateLargeWindow"`
 	LuckWindow           []int  `json:"luckWindow"`
-	Payments             int64  `json:"payments"`
 	Blocks               int64  `json:"blocks"`
 	PurgeOnly            bool   `json:"purgeOnly"`
 	PurgeInterval        string `json:"purgeInterval"`
@@ -106,7 +105,6 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/stats", s.StatsIndex)
 	r.HandleFunc("/api/miners", s.MinersIndex)
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
-	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts/{login:0x[0-9a-fA-F]{40}}", s.AccountIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
@@ -134,7 +132,7 @@ func (s *ApiServer) purgeStale() {
 
 func (s *ApiServer) collectStats() {
 	start := time.Now()
-	stats, err := s.backend.CollectStats(s.hashrateWindow, s.config.Blocks, s.config.Payments)
+	stats, err := s.backend.CollectStats(s.hashrateWindow, s.config.Blocks)
 	if err != nil {
 		log.Printf("Failed to fetch stats from backend: %v", err)
 		return
@@ -225,25 +223,6 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *ApiServer) PaymentsIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-
-	reply := make(map[string]interface{})
-	stats := s.getStats()
-	if stats != nil {
-		reply["payments"] = stats["payments"]
-		reply["paymentsTotal"] = stats["paymentsTotal"]
-	}
-
-	err := json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
-}
-
 func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -269,7 +248,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		stats, err := s.backend.GetMinerStats(login, s.config.Payments)
+		stats, err := s.backend.GetMinerStats(login)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
@@ -284,7 +263,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 		for key, value := range workers {
 			stats[key] = value
 		}
-		stats["pageSize"] = s.config.Payments
+
 		reply = &Entry{stats: stats, updatedAt: now}
 		s.miners[login] = reply
 	}
