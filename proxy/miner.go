@@ -60,6 +60,10 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				// } else if !ok {
 				// log.Printf("Block rejected")
 				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
+				_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
+				if err != nil {
+					log.Println("Failed to insert share data into backend:", err)
+				}
 			} else {
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				s.fetchWork()
@@ -82,10 +86,6 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 
 	} else {
 		fmt.Println("Equihash verify not ok")
-		_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
-		if err != nil {
-			log.Println("Failed to insert share data into backend:", err)
-		}
 		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
 	}
 	// shareExists, validShare, errorReply := s.processShare(cs, id, t, params)
