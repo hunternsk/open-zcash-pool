@@ -436,7 +436,7 @@ func (r *RedisClient) GetMinerStats(login string) (map[string]interface{}, error
 	} else {
 		result, _ := cmds[0].(*redis.StringStringMapCmd).Result()
 		stats["stats"] = convertStringMap(result)
-		roundShares, _ := cmds[3].(*redis.StringCmd).Int64()
+		roundShares, _ := cmds[1].(*redis.StringCmd).Int64()
 		stats["roundShares"] = roundShares
 	}
 
