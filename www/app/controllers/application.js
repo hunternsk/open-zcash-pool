@@ -34,7 +34,7 @@ export default Ember.Controller.extend({
 
   hashrate: Ember.computed('difficulty', {
     get() {
-      return this.getWithDefault('difficulty', 0) / config.APP.BlockTime;
+      return this.getWithDefault('difficulty', 0) / config.APP.BlockTime * 35;
     }
   }),
 
