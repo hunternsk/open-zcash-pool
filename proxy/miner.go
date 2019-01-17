@@ -20,37 +20,37 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	work := s.currentWork()
 	header := work.BuildHeader(cs.extraNonce1, extraNonce2)
 
+	headerWithSol := append(header, util.HexToBytes(solution)...)
+
+	var blockHex []byte = nil
+
+	if HeaderLeTarget(headerWithSol, work.Target) {
+		log.Println("Found block candidate")
+
+		txCountAsHex := strconv.FormatInt(int64(len(work.Template.Transactions)+1), 16)
+
+		if len(txCountAsHex)%2 == 1 {
+			txCountAsHex = "0" + txCountAsHex
+		}
+
+		blockHex = append(headerWithSol, util.HexToBytes(txCountAsHex)...)
+		blockHex = append(blockHex, work.GeneratedCoinbase...)
+
+		for _, transaction := range work.Template.Transactions {
+			blockHex = append(blockHex, util.HexToBytes(transaction.Data)...)
+		}
+	} else {
+		if !SdiffDivDiffGe1(headerWithSol, work) {
+			fmt.Println("Low difficulty share")
+			return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
+		}
+	}
+
 	ok, err := equihash.Verify(200, 9, header, util.HexToBytes(solution)[3:])
 	if err != nil {
 		fmt.Println("equihashVerify error: ", err)
 	}
 	if ok {
-		header = append(header, util.HexToBytes(solution)...)
-
-		var blockHex []byte = nil
-
-		if HeaderLeTarget(header, work.Target) {
-			log.Println("Found block candidate")
-
-			txCountAsHex := strconv.FormatInt(int64(len(work.Template.Transactions)+1), 16)
-
-			if len(txCountAsHex)%2 == 1 {
-				txCountAsHex = "0" + txCountAsHex
-			}
-
-			blockHex = append(header, util.HexToBytes(txCountAsHex)...)
-			blockHex = append(blockHex, work.GeneratedCoinbase...)
-
-			for _, transaction := range work.Template.Transactions {
-				blockHex = append(blockHex, util.HexToBytes(transaction.Data)...)
-			}
-		} else {
-			if !SdiffDivDiffGe1(header, work) {
-				fmt.Println("Low difficulty share")
-				return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
-			}
-		}
-
 		if blockHex != nil {
 			reply, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
@@ -60,10 +60,6 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				// } else if !ok {
 				// log.Printf("Block rejected")
 				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
-				_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
-				if err != nil {
-					log.Println("Failed to insert share data into backend:", err)
-				}
 			} else {
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				s.fetchWork()
@@ -79,6 +75,11 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				}
 				return true, nil
 			}
+		}
+
+		_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
+		if err != nil {
+			log.Println("Failed to insert share data into backend:", err)
 		}
 
 		log.Printf(" Share found by miner %v@%v at height %v", cs.login, cs.ip, work.Height)
