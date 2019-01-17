@@ -103,11 +103,6 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 }
 
 func (r *RPCClient) Check() bool {
-	//TODO
-	// err := r.GetBlockTemplate()
-	// if err != nil {
-	// 	return false
-	// }
 	r.markAlive()
 	return !r.Sick()
 }

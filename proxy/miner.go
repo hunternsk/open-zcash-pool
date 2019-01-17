@@ -11,9 +11,6 @@ import (
 )
 
 func (s *ProxyServer) processShare(cs *Session, id string, params []string) (bool, *ErrorReply) {
-	// workerId := params[0]
-	// jobId := params[1]
-	// nTime := params[2]
 	extraNonce2 := params[3]
 	solution := params[4]
 
@@ -55,11 +52,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 			reply, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
 				fmt.Println("submitBlockError: ", err, reply)
-				// log.Printf("Block submission failure")
 				return false, &ErrorReply{Code: 23, Message: "Submit block error"}
-				// } else if !ok {
-				// log.Printf("Block rejected")
-				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
 			} else {
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				s.fetchWork()
@@ -89,46 +82,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		fmt.Println("Equihash verify not ok")
 		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
 	}
-	// shareExists, validShare, errorReply := s.processShare(cs, id, t, params)
-
-	// if !validShare {
-	// 	log.Printf("Invalid share from %s@%s", cs.login, cs.ip)
-	// 	// Bad shares limit reached, return error and close
-	// 	if !ok {
-	// 		return false, false, errorReply
-	// 	}
-	// 	return false, false, nil
-	// }
-	// log.Printf("Valid share from %s@%s", cs.login, cs.ip)
-
-	// if shareExists {
-	// 	log.Printf("Duplicate share from %s@%s %v", cs.login, cs.ip, params)
-	// 	return false, false, &ErrorReply{Code: 22, Message: "Duplicate share"}
-	// }
-
-	// if !ok {
-	// 	return false, true, &ErrorReply{Code: -1, Message: "High rate of invalid shares"}
-	// }
-	// return false, true, nil
 }
-
-// func HashHeader(w *Work, header []byte) (ShareStatus, string) {
-// 	round1 := sha256.Sum256(header)
-// 	round2 := sha256.Sum256(round1[:])
-
-// 	round2 = util.ReverseBuffer(round2[:])
-
-// 	// Check against the global target
-// 	if TargetCompare(round2, w.Template.Target) <= 0 {
-// 		return ShareBlock, hex.EncodeToString(round2[:])
-// 	}
-
-// 	if TargetCompare(round2, shareTarget) > 1 {
-// 		return ShareInvalid, ""
-// 	}
-
-// 	return ShareOK, ""
-// }
 
 func SdiffDivDiffGe1(header []byte, work *Work) bool {
 	headerHashed := util.Sha256d(header)

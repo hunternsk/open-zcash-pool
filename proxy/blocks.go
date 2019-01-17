@@ -121,18 +121,6 @@ func (s *ProxyServer) fetchWork() {
 	}
 	log.Println("MTRR: ", newWork.MerkleRootReversed)
 
-	// // Copy job backlog and add current one
-	// newBlock.headers[reply[0]] = heightDiffPair{
-	// 	diff:   util.TargetHexToDiff(reply[2]),
-	// 	height: height,
-	// }
-	// if t != nil {
-	// 	for k, v := range t.headers {
-	// 		if v.height > height-maxBacklog {
-	// 			newBlock.headers[k] = v
-	// 		}
-	// 	}
-	// }
 	s.work.Store(&newWork)
 	log.Printf("New block to mine on %s at height %d", rpc.Name, reply.Height)
 

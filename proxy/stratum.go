@@ -174,11 +174,6 @@ func (cs *Session) sendTCPError(id json.RawMessage, reply *ErrorReply) error {
 
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: reply}
 	return cs.enc.Encode(&message)
-	// err := cs.enc.Encode(&message)
-	// if err != nil {
-	// return err
-	// }
-	// return errors.New(reply.Message)
 }
 
 func (self *ProxyServer) setDeadline(conn *net.TCPConn) {
