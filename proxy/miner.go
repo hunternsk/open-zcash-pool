@@ -81,13 +81,10 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 
 	} else {
 		fmt.Println("Equihash verify not ok")
-		// exist, err := s.backend.WriteShare(login, id, params, shareDiff, h.height, s.hashrateExpiration)
-		// if exist {
-		// 	return true, false
-		// }
-		// if err != nil {
-		// 	log.Println("Failed to insert share data into backend:", err)
-		// }
+		_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
+		if err != nil {
+			log.Println("Failed to insert share data into backend:", err)
+		}
 		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
 	}
 	// shareExists, validShare, errorReply := s.processShare(cs, id, t, params)
