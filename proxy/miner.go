@@ -61,17 +61,18 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				// log.Printf("Block rejected")
 				// return false, &ErrorReply{Code: 23, Message: "Invalid share"}
 			} else {
-				s.fetchWork()
-				// exist, err := s.backend.WriteBlock(login, id, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
-				// if exist {
-				// 	return true, false
-				// }
-				// if err != nil {
-				// 	log.Println("Failed to insert block candidate into backend:", err)
-				// } else {
-				// 	log.Printf("Inserted block %v to backend", h.height)
-				// }
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
+				s.fetchWork()
+				shareDiff := s.config.Proxy.Difficulty
+				exist, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration)
+				if exist {
+					return true, nil
+				}
+				if err != nil {
+					log.Println("Failed to insert block candidate into backend:", err)
+				} else {
+					log.Printf("Inserted block %v to backend", work.Height)
+				}
 				return true, nil
 			}
 		}
