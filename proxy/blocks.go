@@ -83,7 +83,7 @@ func (s *ProxyServer) fetchWork() {
 		feeReward += transaction.Fee
 	}
 
-	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(reply.Height, "tmGoHHqgsCRuEna9YQX9zKp9ujeqGLMLEYi", reply.CoinbaseTxn.FoundersReward, feeReward)
+	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(reply.Height, s.config.PoolAddress, reply.CoinbaseTxn.FoundersReward, feeReward)
 
 	txHashes := make([][32]byte, len(reply.Transactions)+1)
 	log.Println("CBTX HASH: ", util.BytesToHex(coinbaseHash[:]))

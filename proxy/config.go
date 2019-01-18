@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	Name                  string        `json:"name"`
+	PoolAddress           string        `json:"poolAddress"`
 	Proxy                 Proxy         `json:"proxy"`
 	Api                   api.ApiConfig `json:"api"`
 	Upstream              []Upstream    `json:"upstream"`
