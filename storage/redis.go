@@ -670,9 +670,9 @@ func convertCandidateResults(raw *redis.ZSliceCmd) []*BlockData {
 		block.Nonce = fields[0]
 		block.PowHash = fields[1]
 		block.MixDigest = fields[2]
-		block.Timestamp, _ = strconv.ParseInt(fields[3], 10, 64)
-		block.Difficulty, _ = strconv.ParseInt(fields[4], 10, 64)
-		block.TotalShares, _ = strconv.ParseInt(fields[5], 10, 64)
+		block.Timestamp, _ = strconv.ParseInt(fields[5], 10, 64)
+		block.Difficulty, _ = strconv.ParseInt(fields[6], 10, 64)
+		block.TotalShares, _ = strconv.ParseInt(fields[7], 10, 64)
 		block.candidateKey = v.Member.(string)
 		result = append(result, &block)
 	}
@@ -693,11 +693,11 @@ func convertBlockResults(rows ...*redis.ZSliceCmd) []*BlockData {
 			block.Orphan, _ = strconv.ParseBool(fields[1])
 			block.Nonce = fields[2]
 			block.Hash = fields[3]
-			block.Timestamp, _ = strconv.ParseInt(fields[4], 10, 64)
-			block.Difficulty, _ = strconv.ParseInt(fields[5], 10, 64)
-			block.TotalShares, _ = strconv.ParseInt(fields[6], 10, 64)
-			block.RewardString = fields[7]
-			block.ImmatureReward = fields[7]
+			block.Timestamp, _ = strconv.ParseInt(fields[6], 10, 64)
+			block.Difficulty, _ = strconv.ParseInt(fields[7], 10, 64)
+			block.TotalShares, _ = strconv.ParseInt(fields[8], 10, 64)
+			block.RewardString = fields[9]
+			block.ImmatureReward = fields[9]
 			block.immatureKey = v.Member.(string)
 			result = append(result, &block)
 		}
