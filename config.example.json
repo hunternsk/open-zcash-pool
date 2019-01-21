@@ -65,12 +65,12 @@
 	"upstream": [
 		{
 			"name": "main",
-			"url": "http://yourUsername:yourPassword@127.0.0.1:18232",
+			"url": "http://yourZcashNodeUsername:yourZcashNodePassword@127.0.0.1:18232",
 			"timeout": "10s"
 		},
 		{
 			"name": "backup",
-			"url": "http://yourUsername:yourPassword@127.0.0.2:18232",
+			"url": "http://yourZcashNodeUsername:yourZcashNodePassword@127.0.0.2:18232",
 			"timeout": "10s"
 		}
 	],
