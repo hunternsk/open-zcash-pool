@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -42,7 +41,7 @@ func (r *RPCClient) GetBlockTemplate(reply interface{}) error {
 		return err
 	}
 	err = json.Unmarshal(*rpcResp.Result, reply)
-	// fmt.Println("6", reply)
+	return err
 	return err
 }
 

@@ -86,10 +86,9 @@ func (s *ProxyServer) fetchWork() {
 	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(reply.Height, s.config.PoolAddress, reply.CoinbaseTxn.FoundersReward, feeReward)
 
 	txHashes := make([][32]byte, len(reply.Transactions)+1)
-	log.Println("CBTX HASH: ", util.BytesToHex(coinbaseHash[:]))
 	copy(txHashes[0][:], coinbaseHash[:])
+
 	for i, transaction := range reply.Transactions {
-		log.Println("TX HASH: ", transaction.Hash)
 		copy(txHashes[i+1][:], util.ReverseBuffer(util.HexToBytes(transaction.Hash)))
 	}
 
@@ -103,7 +102,6 @@ func (s *ProxyServer) fetchWork() {
 	}
 
 	target, _ := new(big.Int).SetString(reply.Target, 16)
-	log.Println("MTR: ", util.BytesToHex(mtr[:]))
 	newWork := Work{
 		JobId:                util.BytesToHex([]byte(time.Now().String())),
 		Version:              util.BytesToHex(util.PackUInt32LE(reply.Version)),
@@ -119,7 +117,6 @@ func (s *ProxyServer) fetchWork() {
 		Template:             &reply,
 		GeneratedCoinbase:    coinbaseTxn,
 	}
-	log.Println("MTRR: ", newWork.MerkleRootReversed)
 
 	s.work.Store(&newWork)
 	log.Printf("New block to mine on %s at height %d", rpc.Name, reply.Height)

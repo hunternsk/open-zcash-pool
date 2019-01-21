@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -101,28 +100,9 @@ func GetTargetHex(diff int64) string {
 	difficulty := big.NewInt(diff)
 	bytes := new(big.Int).Div(PowLimitTest, difficulty).Bytes()
 	copy(result[len(result)-len(bytes):], bytes)
-	fmt.Println("TargetHex:", result, BytesToHex(result[:]))
-	return BytesToHex(result[:])
-	// fmt.Println("------------------")
-	// difficulty := big.NewInt(diff * 8192)
-	// fmt.Println(diff, difficulty, PowLimitTest)
-	// adjPow := BytesToHex(new(big.Int).Div(powLimitTest, difficulty).Bytes())
-	// fmt.Println(adjPow, len(adjPow), 64-len(adjPow))
-	// zeroPad := ""
-	// if 64-len(adjPow) != 0 {
-	// 	zeroPad = strings.Repeat("0", 64-len(adjPow))
-	// }
-	// fmt.Println(strings.Join([]string{zeroPad, adjPow}, "")[0:64])
-	// fmt.Println(strings.Join([]string{zeroPad, adjPow}, "")[0:64])
-	// fmt.Println("------------------")
-	// return strings.Join([]string{zeroPad, adjPow}, "")[0:64]
-}
 
-// func GetTargetHex(diff int64) string {
-// 	difficulty := big.NewInt(diff)
-// 	diff1 := new(big.Int).Div(pow256, difficulty)
-// 	return string(common.ToHex(diff1.Bytes()))
-// }
+	return BytesToHex(result[:])
+}
 
 func TargetHexToDiff(targetHex string) *big.Int {
 	targetBytes := common.FromHex(targetHex)

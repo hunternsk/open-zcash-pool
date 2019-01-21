@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"log"
 	"math/big"
 	"strconv"
@@ -22,8 +21,6 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	var blockHex []byte = nil
 
 	if HeaderLeTarget(headerWithSol, work.Target) {
-		log.Println("Found block candidate")
-
 		txCountAsHex := strconv.FormatInt(int64(len(work.Template.Transactions)+1), 16)
 
 		if len(txCountAsHex)%2 == 1 {
@@ -38,34 +35,35 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 		}
 	} else {
 		if !SdiffDivDiffGe1(headerWithSol, work) {
-			fmt.Println("Low difficulty share")
 			return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
 		}
 	}
 
 	ok, err := equihash.Verify(200, 9, header, util.HexToBytes(solution)[3:])
 	if err != nil {
-		fmt.Println("equihashVerify error: ", err)
+		log.Println("Equihash verifier error:", err)
 	}
 	if ok {
 		if blockHex != nil {
 			reply, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
-				fmt.Println("submitBlockError: ", err, reply)
 				return false, &ErrorReply{Code: 23, Message: "Submit block error"}
 			} else {
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				s.fetchWork()
 				shareDiff := s.config.Proxy.Difficulty
-				exist, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration)
-				if exist {
+				exists, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration)
+
+				if exists {
 					return true, nil
 				}
+
 				if err != nil {
 					log.Println("Failed to insert block candidate into backend:", err)
 				} else {
 					log.Printf("Inserted block %v to backend", work.Height)
 				}
+
 				return true, nil
 			}
 		}
@@ -75,12 +73,11 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 			log.Println("Failed to insert share data into backend:", err)
 		}
 
-		log.Printf(" Share found by miner %v@%v at height %v", cs.login, cs.ip, work.Height)
-		return true, nil
+		log.Printf("Share found by miner %v@%v at height %v", cs.login, cs.ip, work.Height)
 
+		return true, nil
 	} else {
-		fmt.Println("Equihash verify not ok")
-		return false, &ErrorReply{Code: 23, Message: "Equihash verify not ok"}
+		return false, &ErrorReply{Code: 23, Message: "Incorrect solution"}
 	}
 }
 

@@ -1,7 +1,6 @@
 package transaction
 
 import (
-	"log"
 	"math"
 	"strconv"
 
@@ -58,11 +57,9 @@ func BuildCoinbaseTxn(blockHeight uint64, poolAddress string, foundersRewardSato
 
 	// calc which founder
 	index := int(math.Floor(float64(blockHeight) / util.FoundersRewardAddressChangeInterval))
-	log.Println(util.TestFoundersRewardAddresses[index])
+
 	poolAddressScriptFormat, _ := zaddr.DecodeAddress(poolAddress, &chaincfg.TestNet3Params)
 	foundersAddressScriptFormat, _ := zaddr.DecodeAddress(util.TestFoundersRewardAddresses[index], &chaincfg.TestNet3Params)
-
-	log.Println(poolAddressScriptFormat.String())
 
 	poolScript, _ := zaddr.PayToAddrScript(poolAddressScriptFormat)
 	founderScript, _ := zaddr.PayToAddrScript(foundersAddressScriptFormat)
