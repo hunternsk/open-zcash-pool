@@ -30,7 +30,7 @@ $ cd ~
 $ git clone https://github.com/JKKGBE/open-zcash-pool.git
 $ cd open-zcash-pool/equihash/libs
 $ make
-$ cd ..
+$ cd ../..
 $ make
 ```
 
