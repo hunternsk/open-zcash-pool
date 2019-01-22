@@ -210,8 +210,8 @@ func (r *RedisClient) WriteBlock(login, id string, params []string, diff, roundD
 
 func (r *RedisClient) writeShare(tx *redis.Multi, ms, ts int64, login, id string, diff int64, expire time.Duration) {
 	tx.HIncrBy(r.formatKey("shares", "roundCurrent"), login, diff)
-	tx.ZAdd(r.formatKey("hashrate"), redis.Z{Score: float64(ts), Member: join(diff, login, id, ms)})
-	tx.ZAdd(r.formatKey("hashrate", login), redis.Z{Score: float64(ts), Member: join(diff, id, ms)})
+	tx.ZAdd(r.formatKey("hashrate"), redis.Z{Score: float64(ts), Member: join(diff, login, id, ms, diff*35)})
+	tx.ZAdd(r.formatKey("hashrate", login), redis.Z{Score: float64(ts), Member: join(diff, id, ms, diff*35)})
 	tx.Expire(r.formatKey("hashrate", login), expire) // Will delete hashrates for miners that gone
 	tx.HSet(r.formatKey("miners", login), "lastShare", strconv.FormatInt(ts, 10))
 }
@@ -713,19 +713,18 @@ func convertWorkersStats(window int64, raw *redis.ZSliceCmd) map[string]Worker {
 
 	for _, v := range raw.Val() {
 		parts := strings.Split(v.Member.(string), ":")
-		share, _ := strconv.ParseInt(parts[0], 10, 64)
+		shareAdjusted, _ := strconv.ParseInt(parts[3], 10, 64)
 		id := parts[1]
 		score := int64(v.Score)
 		worker := workers[id]
 
 		// Add for large window
-		worker.TotalHR += share
+		worker.TotalHR += shareAdjusted
 
 		// Add for small window if matches
 		if score >= now-window {
-			worker.HR += share
+			worker.HR += shareAdjusted
 		}
-
 		if worker.LastBeat < score {
 			worker.LastBeat = score
 		}
@@ -734,6 +733,7 @@ func convertWorkersStats(window int64, raw *redis.ZSliceCmd) map[string]Worker {
 		}
 		workers[id] = worker
 	}
+
 	return workers
 }
 
@@ -744,11 +744,11 @@ func convertMinersStats(window int64, raw *redis.ZSliceCmd) (int64, map[string]M
 
 	for _, v := range raw.Val() {
 		parts := strings.Split(v.Member.(string), ":")
-		share, _ := strconv.ParseInt(parts[0], 10, 64)
+		shareAdjusted, _ := strconv.ParseInt(parts[4], 10, 64)
 		id := parts[1]
 		score := int64(v.Score)
 		miner := miners[id]
-		miner.HR += share
+		miner.HR += shareAdjusted
 
 		if miner.LastBeat < score {
 			miner.LastBeat = score
