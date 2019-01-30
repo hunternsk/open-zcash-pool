@@ -1,15 +1,17 @@
 package proxy
 
 import (
-	"github.com/jkkgbe/open-zcash-pool/policy"
+	"github.com/jkkgbe/open-zcash-pool/api"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
 
 type Config struct {
-	Name                  string     `json:"name"`
-	Proxy                 Proxy      `json:"proxy"`
-	Upstream              []Upstream `json:"upstream"`
-	UpstreamCheckInterval string     `json:"upstreamCheckInterval"`
+	Name                  string        `json:"name"`
+	PoolAddress           string        `json:"poolAddress"`
+	Proxy                 Proxy         `json:"proxy"`
+	Api                   api.ApiConfig `json:"api"`
+	Upstream              []Upstream    `json:"upstream"`
+	UpstreamCheckInterval string        `json:"upstreamCheckInterval"`
 
 	Threads int `json:"threads"`
 
@@ -34,8 +36,6 @@ type Proxy struct {
 	Difficulty           int64  `json:"difficulty"`
 	StateUpdateInterval  string `json:"stateUpdateInterval"`
 	HashrateExpiration   string `json:"hashrateExpiration"`
-
-	Policy policy.Config `json:"policy"`
 
 	MaxFails    int64 `json:"maxFails"`
 	HealthCheck bool  `json:"healthCheck"`

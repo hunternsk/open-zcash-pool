@@ -3,7 +3,6 @@ package proxy
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -43,10 +42,6 @@ func (s *ProxyServer) ListenTCP() {
 
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if s.policy.IsBanned(ip) || !s.policy.ApplyLimitPolicy(ip) {
-			conn.Close()
-			continue
-		}
 		n += 1
 		cs := &Session{conn: conn, ip: ip}
 
@@ -70,9 +65,7 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 	for {
 		data, isPrefix, err := connbuff.ReadLine()
 		if isPrefix {
-			fmt.Println(string(data))
 			log.Printf("Socket flood detected from %s", cs.ip)
-			s.policy.BanClient(cs.ip)
 			return err
 		} else if err == io.EOF {
 			log.Printf("Client %s disconnected", cs.ip)
@@ -87,7 +80,6 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 			var req StratumReq
 			err = json.Unmarshal(data, &req)
 			if err != nil {
-				s.policy.ApplyMalformedPolicy(cs.ip)
 				log.Printf("Malformed stratum request from %s: %v", cs.ip, err)
 				return err
 			}
@@ -116,15 +108,13 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 	case "mining.subscribe":
 		extraNonce1 := s.extraNonceCounter.getNextExtraNonce1()
 		reply = s.handleSubscribeRPC(cs, extraNonce1)
-		fmt.Println("mining.subscribe", params, reply, errReply)
 	case "mining.authorize":
 		reply, errReply = s.handleAuthorizeRPC(cs, params)
-		fmt.Println("mining.authorize", params, reply, errReply)
 		if errReply != nil {
 			return cs.sendTCPError(req.Id, errReply)
 		}
 		cs.sendTCPResult(req.Id, reply)
-		// TODO set_target
+
 		var d = []interface{}{s.diff}
 		cs.setTarget(&d)
 		t := s.currentWork()
@@ -135,10 +125,8 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 		return cs.pushNewJob(&reply)
 	case "mining.submit":
 		reply, errReply = s.handleTCPSubmitRPC(cs, params, req.Worker)
-		fmt.Println("mining.submit", params, reply, errReply)
 	case "mining.extranonce.subscribe":
 		errReply = &ErrorReply{Code: 20, Message: "Not supported."}
-		fmt.Println("mining.extranonce.subscribe", params, reply, errReply)
 	default:
 		errReply = s.handleUnknownRPC(cs, req.Method)
 	}
@@ -146,6 +134,7 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 	if errReply != nil {
 		return cs.sendTCPError(req.Id, errReply)
 	}
+
 	return cs.sendTCPResult(req.Id, reply)
 }
 
@@ -161,7 +150,6 @@ func (cs *Session) setTarget(params *[]interface{}) error {
 	cs.Lock()
 	defer cs.Unlock()
 	message := JSONPushMessage{Version: "2.0", Method: "mining.set_target", Params: *params, Id: 0}
-	fmt.Println("setTarget", &message)
 	return cs.enc.Encode(&message)
 }
 
@@ -169,7 +157,6 @@ func (cs *Session) pushNewJob(params *[]interface{}) error {
 	cs.Lock()
 	defer cs.Unlock()
 	message := JSONPushMessage{Version: "2.0", Method: "mining.notify", Params: *params, Id: 0}
-	fmt.Println("pushNewJob", message)
 	return cs.enc.Encode(&message)
 }
 
@@ -179,11 +166,6 @@ func (cs *Session) sendTCPError(id json.RawMessage, reply *ErrorReply) error {
 
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: reply}
 	return cs.enc.Encode(&message)
-	// err := cs.enc.Encode(&message)
-	// if err != nil {
-	// return err
-	// }
-	// return errors.New(reply.Message)
 }
 
 func (self *ProxyServer) setDeadline(conn *net.TCPConn) {

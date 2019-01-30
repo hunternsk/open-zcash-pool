@@ -30,9 +30,6 @@ func (s *ProxyServer) handleAuthorizeRPC(cs *Session, params []string) (bool, *E
 	if !util.IsValidtAddress(login) {
 		return false, &ErrorReply{Code: -1, Message: "Invalid login"}
 	}
-	if !s.policy.ApplyLoginPolicy(login, cs.ip) {
-		return false, &ErrorReply{Code: -1, Message: "You are blacklisted"}
-	}
 	cs.login = login
 	s.registerSession(cs)
 	log.Printf("Stratum miner connected %v@%v", login, cs.ip)
@@ -59,25 +56,21 @@ func (s *ProxyServer) handleSubmitRPC(cs *Session, params []string, id string) (
 	}
 
 	if len(params) != 5 {
-		s.policy.ApplyMalformedPolicy(cs.ip)
 		log.Printf("Malformed params from %s@%s %v", cs.login, cs.ip, params)
 		return false, &ErrorReply{Code: -1, Message: "Invalid params"}
 	}
 
 	if !nTimePattern.MatchString(params[2]) {
-		s.policy.ApplyMalformedPolicy(cs.ip)
 		log.Printf("Malformed nTime result from %s@%s %v", cs.login, cs.ip, params)
 		return false, &ErrorReply{Code: -1, Message: "Malformed nTime result"}
 	}
 
 	if !noncePattern.MatchString(cs.extraNonce1 + params[3]) {
-		s.policy.ApplyMalformedPolicy(cs.ip)
 		log.Printf("Malformed nonce result from %s@%s %v", cs.login, cs.ip, params)
 		return false, &ErrorReply{Code: -1, Message: "Malformed nonce result"}
 	}
 
 	if len(params[4]) != 2694 {
-		s.policy.ApplyMalformedPolicy(cs.ip)
 		log.Printf("Malformed solution result from %s@%s %v", cs.login, cs.ip, params)
 		return false, &ErrorReply{Code: -1, Message: "Malformed solution result, != 2694 length"}
 	}
@@ -87,6 +80,5 @@ func (s *ProxyServer) handleSubmitRPC(cs *Session, params []string, id string) (
 
 func (s *ProxyServer) handleUnknownRPC(cs *Session, m string) *ErrorReply {
 	log.Printf("Unknown request method %s from %s", m, cs.ip)
-	s.policy.ApplyMalformedPolicy(cs.ip)
 	return &ErrorReply{Code: -3, Message: "Method not found"}
 }

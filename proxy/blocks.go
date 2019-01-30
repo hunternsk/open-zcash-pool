@@ -4,8 +4,10 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/jkkgbe/open-zcash-pool/merkleTree"
+	"github.com/jkkgbe/open-zcash-pool/transaction"
 	"github.com/jkkgbe/open-zcash-pool/util"
 )
 
@@ -19,46 +21,47 @@ type heightDiffPair struct {
 type Transaction struct {
 	Data string `json:"data"`
 	Hash string `json:"hash"`
-	Fee  int    `json:"fee"`
+	Fee  int64  `json:"fee"`
 }
 
 type CoinbaseTxn struct {
 	Data           string `json:"data"`
 	Hash           string `json:"hash"`
-	FoundersReward int    `json:"foundersreward"`
+	FoundersReward int64  `json:"foundersreward"`
 }
 
 type BlockTemplate struct {
 	sync.RWMutex
-	Version       uint32        `json:"version"`
-	PrevBlockHash string        `json:"previousblockhash"`
-	Transactions  []Transaction `json:"transactions"`
-	CoinbaseTxn   CoinbaseTxn   `json:"coinbasetxn"`
-	LongpollId    string        `json:"longpollid"`
-	Target        string        `json:"target"`
-	MinTime       int           `json:"mintime"`
-	NonceRange    string        `json:"noncerange"`
-	SigOpLimit    int           `json:"sigoplimit"`
-	SizeLimit     int           `json:"sizelimit"`
-	CurTime       uint32        `json:"curtime"`
-	Bits          string        `json:"bits"`
-	Height        int           `json:"height"`
+	Version              uint32        `json:"version"`
+	PrevBlockHash        string        `json:"previousblockhash"`
+	FinalSaplingRootHash string        `json:"finalsaplingroothash"`
+	Transactions         []Transaction `json:"transactions"`
+	CoinbaseTxn          CoinbaseTxn   `json:"coinbasetxn"`
+	LongpollId           string        `json:"longpollid"`
+	Target               string        `json:"target"`
+	MinTime              int           `json:"mintime"`
+	NonceRange           string        `json:"noncerange"`
+	SigOpLimit           int           `json:"sigoplimit"`
+	SizeLimit            int           `json:"sizelimit"`
+	CurTime              uint32        `json:"curtime"`
+	Bits                 string        `json:"bits"`
+	Height               uint64        `json:"height"`
 }
 
 type Work struct {
-	JobId              string
-	Version            string
-	PrevHashReversed   string
-	MerkleRootReversed string
-	ReservedField      string
-	Time               string
-	Bits               string
-	CleanJobs          bool
-	Template           *BlockTemplate
-	// Nonce              string
-	// SolutionSize       [3]byte
-	// Solution           [1344]byte
-	// Header             [4 + 32 + 32 + 32 + 4 + 4 + 32 + 3 + 1344]byte
+	JobId                string
+	Version              string
+	PrevHashReversed     string
+	MerkleRootReversed   string
+	FinalSaplingRootHash string
+	Time                 string
+	Bits                 string
+	Target               string
+	Height               uint64
+	Difficulty           *big.Int
+	CleanJobs            bool
+	Template             *BlockTemplate
+	GeneratedCoinbase    []byte
 }
 
 func (s *ProxyServer) fetchWork() {
@@ -75,42 +78,46 @@ func (s *ProxyServer) fetchWork() {
 		return
 	}
 
-	// generatedTxHash := CreateRawTransaction(inputs, outputs).TxHash()
+	var feeReward int64 = 0
+	for _, transaction := range reply.Transactions {
+		feeReward += transaction.Fee
+	}
+
+	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(reply.Height, s.config.PoolAddress, reply.CoinbaseTxn.FoundersReward, feeReward)
+
 	txHashes := make([][32]byte, len(reply.Transactions)+1)
-	// txHashes[0] = util.ReverseBuffer(generatedTxHash)
-	copy(txHashes[0][:], util.HexToBytes(reply.CoinbaseTxn.Hash)[:32])
+	copy(txHashes[0][:], coinbaseHash[:])
+
 	for i, transaction := range reply.Transactions {
-		copy(txHashes[i+1][:], util.HexToBytes(transaction.Hash)[:32])
+		copy(txHashes[i+1][:], util.ReverseBuffer(util.HexToBytes(transaction.Hash)))
 	}
 
-	mtBottomRow := txHashes
-	mt := merkleTree.NewMerkleTree(mtBottomRow)
-	mtr := mt.MerkleRoot()
+	var mtr [32]byte
 
+	if len(txHashes) > 1 {
+		mt := merkleTree.NewMerkleTree(txHashes)
+		mtr = mt.MerkleRoot()
+	} else {
+		copy(mtr[:], txHashes[0][:])
+	}
+
+	target, _ := new(big.Int).SetString(reply.Target, 16)
 	newWork := Work{
-		JobId:              "1",
-		Version:            util.BytesToHex(util.PackUInt32LE(reply.Version)),
-		PrevHashReversed:   util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.PrevBlockHash))),
-		MerkleRootReversed: util.BytesToHex(util.ReverseBuffer(mtr[:])),
-		ReservedField:      "0000000000000000000000000000000000000000000000000000000000000000",
-		Time:               util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
-		Bits:               util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
-		CleanJobs:          true,
-		Template:           &reply,
+		JobId:                util.BytesToHex([]byte(time.Now().String())),
+		Version:              util.BytesToHex(util.PackUInt32LE(reply.Version)),
+		PrevHashReversed:     util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.PrevBlockHash))),
+		MerkleRootReversed:   util.BytesToHex(mtr[:]),
+		FinalSaplingRootHash: util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.FinalSaplingRootHash))),
+		Time:                 util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
+		Bits:                 util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
+		Target:               reply.Target,
+		Height:               reply.Height,
+		Difficulty:           new(big.Int).Div(util.PowLimitTest, target),
+		CleanJobs:            true,
+		Template:             &reply,
+		GeneratedCoinbase:    coinbaseTxn,
 	}
 
-	// // Copy job backlog and add current one
-	// newBlock.headers[reply[0]] = heightDiffPair{
-	// 	diff:   util.TargetHexToDiff(reply[2]),
-	// 	height: height,
-	// }
-	// if t != nil {
-	// 	for k, v := range t.headers {
-	// 		if v.height > height-maxBacklog {
-	// 			newBlock.headers[k] = v
-	// 		}
-	// 	}
-	// }
 	s.work.Store(&newWork)
 	log.Printf("New block to mine on %s at height %d", rpc.Name, reply.Height)
 
@@ -124,7 +131,7 @@ func (w *Work) BuildHeader(noncePart1, noncePart2 string) []byte {
 	result := util.HexToBytes(w.Version)
 	result = append(result, util.HexToBytes(w.PrevHashReversed)...)
 	result = append(result, util.HexToBytes(w.MerkleRootReversed)...)
-	result = append(result, util.HexToBytes(w.ReservedField)...)
+	result = append(result, util.HexToBytes(w.FinalSaplingRootHash)...)
 	result = append(result, util.HexToBytes(w.Time)...)
 	result = append(result, util.HexToBytes(w.Bits)...)
 	result = append(result, util.HexToBytes(noncePart1)...)
@@ -138,7 +145,7 @@ func (w *Work) CreateJob() []interface{} {
 		w.Version,
 		w.PrevHashReversed,
 		w.MerkleRootReversed,
-		w.ReservedField,
+		w.FinalSaplingRootHash,
 		w.Time,
 		w.Bits,
 		w.CleanJobs,
