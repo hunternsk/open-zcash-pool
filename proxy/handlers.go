@@ -27,7 +27,7 @@ func (s *ProxyServer) handleAuthorizeRPC(cs *Session, params []string) (bool, *E
 	}
 
 	login := params[0]
-	if !util.IsValidtAddress(login) {
+	if !util.IsValidLogin(login) {
 		return false, &ErrorReply{Code: -1, Message: "Invalid login"}
 	}
 	cs.login = login

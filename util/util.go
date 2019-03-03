@@ -22,6 +22,7 @@ var PowLimitTest = new(big.Int).Sub(math.BigPow(2, 251), big.NewInt(1))
 var pow256 = math.BigPow(2, 256)
 var addressPattern = regexp.MustCompile("^0x[0-9a-fA-F]{40}$")
 var tAddressPattern = regexp.MustCompile("^t[0-9a-zA-Z]{34}$")
+var loginPattern = regexp.MustCompile("^[[:alnum:]]{,40}$")
 var zeroHash = regexp.MustCompile("^0?x?0+$")
 
 var FoundersRewardAddressChangeInterval = 17709.3125
@@ -85,6 +86,10 @@ func IsValidHexAddress(s string) bool {
 
 func IsValidtAddress(s string) bool {
 	return tAddressPattern.MatchString(s)
+}
+
+func IsValidLogin(s string) bool {
+	return loginPattern.MatchString(s)
 }
 
 func IsZeroHash(s string) bool {
