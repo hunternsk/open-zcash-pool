@@ -13,12 +13,10 @@ import (
 )
 
 func BuildCoinbaseTxn(blockHeight int64, poolAddress string, foundersRewardZatoshi int64, feeReward int64) ([]byte, chainhash.Hash) {
-	// build input
-	// blockheight script
-
 	blockHeightAsHex := strconv.FormatInt(blockHeight, 16)
 
 	var blockHeightSerial string
+
 	if len(blockHeightAsHex)%2 != 0 {
 		blockHeightSerial = "0" + blockHeightAsHex
 	} else {
@@ -39,7 +37,6 @@ func BuildCoinbaseTxn(blockHeight int64, poolAddress string, foundersRewardZatos
 	blockHeightScript = append(blockHeightScript, util.HexToBytes(length)...)
 	blockHeightScript = append(blockHeightScript, util.ReverseBuffer(util.HexToBytes(blockHeightSerial))...)
 	blockHeightScript = append(blockHeightScript, []byte{0}...)
-	// blockHeightScriptOzp := append(blockHeightScript, util.HexToBytes("4f5a502068747470733a2f2f6769746875622e636f6d2f4a4b4b4742452f6f70656e2d7a636173682d706f6f6c")...)
 
 	var hash32 [32]byte
 	copy(hash32[:], make([]byte, 32))
@@ -55,7 +52,7 @@ func BuildCoinbaseTxn(blockHeight int64, poolAddress string, foundersRewardZatos
 		Sequence:         4294967295,
 	}
 
-	// calc which founder
+	// Calculate which founder
 	index := int(math.Floor(float64(blockHeight) / util.FoundersRewardAddressChangeInterval))
 
 	poolAddressScriptFormat, _ := zaddr.DecodeAddress(poolAddress, &chaincfg.TestNet3Params)

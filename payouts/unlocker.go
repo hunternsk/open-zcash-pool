@@ -26,11 +26,7 @@ type UnlockerConfig struct {
 	Timeout        string  `json:"timeout"`
 }
 
-const minDepth = 3 // 100
-// const byzantiumHardForkHeight = 4370000
-
-// var homesteadReward = math.MustParseBig256("5000000000000000000")
-// var byzantiumReward = math.MustParseBig256("3000000000000000000")
+const minDepth = 3
 
 // Donate 10% from pool fees to developers
 const donationFee = 10.0
@@ -61,14 +57,14 @@ func NewBlockUnlocker(cfg *UnlockerConfig, backend *storage.RedisClient) *BlockU
 
 func (u *BlockUnlocker) Start() {
 	log.Println("Starting block unlocker")
-	intv := util.MustParseDuration(u.config.Interval)
-	timer := time.NewTimer(intv)
-	log.Printf("Set block unlock interval to %v", intv)
+	interval := util.MustParseDuration(u.config.Interval)
+	timer := time.NewTimer(interval)
+	log.Printf("Set block unlock interval to %v", interval)
 
 	// Immediately unlock after start
 	u.unlockPendingBlocks()
 	u.unlockAndCreditMiners()
-	timer.Reset(intv)
+	timer.Reset(interval)
 
 	go func() {
 		for {
@@ -76,7 +72,7 @@ func (u *BlockUnlocker) Start() {
 			case <-timer.C:
 				u.unlockPendingBlocks()
 				u.unlockAndCreditMiners()
-				timer.Reset(intv)
+				timer.Reset(interval)
 			}
 		}
 	}()
@@ -86,17 +82,9 @@ type UnlockResult struct {
 	maturedBlocks  []*storage.BlockData
 	orphanedBlocks []*storage.BlockData
 	orphans        int
-	//uncles         int
-	blocks int
-} //Delete Uncle info
+	blocks         int
+}
 
-/* Geth does not provide consistent state when you need both new height and new job,
- * so in redis I am logging just what I have in a pool state on the moment when block found.
- * Having very likely incorrect height in database results in a weird block unlocking scheme,
- * when I have to check what the hell we actually found and traversing all the blocks with height-N and height+N
- * to make sure we will find it. We can't rely on round height here, it's just a reference point.
- * ISSUE: https://github.com/ethereum/go-ethereum/issues/2333
- */
 func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData, blockType string) (*UnlockResult, error) {
 	result := &UnlockResult{}
 
@@ -104,9 +92,7 @@ func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData, blockT
 	for _, candidate := range candidates {
 		orphan := true
 
-		/* Search for a normal block with wrong height here by traversing 16 blocks back and forward.
-		 * Also we are searching for a block that can include this one as uncle.
-		 */
+		// Search for a normal block with wrong height here by traversing 16 blocks back and forward.
 		for i := int64(minDepth * -1); i < minDepth; i++ {
 			height := candidate.Height + i
 
@@ -138,43 +124,13 @@ func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData, blockT
 				break
 			}
 
-			// if len(block.Uncles) == 0 {
-			// 	continue
-			// }
-
-			// // Trying to find uncle in current block during our forward check
-			// for uncleIndex, uncleHash := range block.Uncles {
-			// 	uncle, err := u.rpc.GetUncleByBlockNumberAndIndex(height, uncleIndex)
-			// 	if err != nil {
-			// 		return nil, fmt.Errorf("Error while retrieving uncle of block %v from node: %v", uncleHash, err)
-			// 	}
-			// 	if uncle == nil {
-			// 		return nil, fmt.Errorf("Error while retrieving uncle of block %v from node", height)
-			// 	}
-
-			// 	// Found uncle
-			// 	if matchCandidate(uncle, candidate) {
-			// 		orphan = false
-			// 		result.uncles++
-
-			// 		err := handleUncle(height, uncle, candidate)
-			// 		if err != nil {
-			// 			u.halt = true
-			// 			u.lastFail = err
-			// 			return nil, err
-			// 		}
-			// 		result.maturedBlocks = append(result.maturedBlocks, candidate)
-			// 		log.Printf("Mature uncle %v/%v of reward %v with hash: %v", candidate.Height, candidate.UncleHeight,
-			// 			util.FormatReward(candidate.Reward), uncle.Hash[0:10])
-			// 		break
-			// 	}
-			// }
-			// Found block or uncle
+			// Found block
 			if !orphan {
 				break
 			}
 		}
-		// Block is lost, we didn't find any valid block or uncle matching our data in a blockchain
+
+		// Block is lost, we didn't find any valid block in a blockchain
 		if orphan {
 			result.orphans++
 			candidate.Orphan = true
@@ -194,19 +150,14 @@ func (u *BlockUnlocker) handleBlock(block *rpc.GetBlockReply, candidate *storage
 
 	// Add TX fees
 	extraTxReward, err := u.backend.GetBlockFees(block.Height, blockType)
-	// extraTxReward, err := u.getExtraRewardForTx(block) // todo get fees from backend
+
 	if err != nil {
-		return fmt.Errorf("Error while fetching TX receipt: %v", err)
+		return fmt.Errorf("error while fetching TX receipt: %v", err)
 	}
 
 	if !u.config.KeepTxFees {
 		reward.Add(reward, extraTxReward)
 	}
-
-	// Add reward for including uncles
-	// uncleReward := getRewardForUncle(candidate.Height)
-	// rewardForUncles := big.NewInt(0).Mul(uncleReward, big.NewInt(int64(len(block.Uncles))))
-	// reward.Add(reward, rewardForUncles)
 
 	candidate.Height = block.Height
 	candidate.Orphan = false
@@ -251,7 +202,6 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 		return
 	}
 	log.Printf("Immature %v blocks, %v orphans", result.blocks, result.orphans)
-	//log.Printf("Immature %v blocks, %v uncles, %v orphans", result.blocks, result.uncles, result.orphans)
 
 	err = u.backend.WritePendingOrphans(result.orphanedBlocks)
 	if err != nil {
@@ -451,23 +401,3 @@ func chargeFee(value *big.Rat, fee float64) (*big.Rat, *big.Rat) {
 	feeValue := new(big.Rat).Mul(value, feePercent)
 	return new(big.Rat).Sub(value, feeValue), feeValue
 }
-
-// func weiToShannonInt64(wei *big.Rat) int64 {
-// 	shannon := new(big.Rat).SetInt(util.Shannon)
-// 	inShannon := new(big.Rat).Quo(wei, shannon)
-// 	value, _ := strconv.ParseInt(inShannon.FloatString(0), 10, 64)
-// 	return value
-// }
-
-// func getRewardForUncle(height int64) *big.Int {
-// 	reward := getConstReward(height)
-// 	return new(big.Int).Div(reward, new(big.Int).SetInt64(32))
-// }
-
-// func getUncleReward(uHeight, height int64) *big.Int {
-// 	reward := getConstReward(height)
-// 	k := height - uHeight
-// 	reward.Mul(big.NewInt(8-k), reward)
-// 	reward.Div(reward, big.NewInt(8))
-// 	return reward
-// }

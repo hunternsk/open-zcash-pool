@@ -9,18 +9,18 @@ import (
 	"github.com/jkkgbe/open-zcash-pool/util"
 )
 
-func (s *ProxyServer) processShare(cs *Session, id string, params []string) (bool, *ErrorReply) {
+func (proxyServer *ProxyServer) processShare(session *Session, id string, params []string) (bool, *ErrorReply) {
 	extraNonce2 := params[3]
 	solution := params[4]
 
-	work := s.currentWork()
-	header := work.BuildHeader(cs.extraNonce1, extraNonce2)
+	work := proxyServer.currentWork()
+	header := work.BuildHeader(session.extraNonce1, extraNonce2)
 
 	headerWithSol := append(header, util.HexToBytes(solution)...)
 
 	var blockHex []byte = nil
 
-	if HeaderLeTarget(headerWithSol, work.Target) {
+	if isHeaderLeTarget(headerWithSol, work.Target) {
 		txCountAsHex := strconv.FormatInt(int64(len(work.Template.Transactions)+1), 16)
 
 		if len(txCountAsHex)%2 == 1 {
@@ -34,7 +34,7 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 			blockHex = append(blockHex, util.HexToBytes(transaction.Data)...)
 		}
 	} else {
-		if !SdiffDivDiffGe1(headerWithSol, work) {
+		if !isShareDiffGeDiff(headerWithSol, proxyServer.config.Proxy.Difficulty) {
 			return false, &ErrorReply{Code: 23, Message: "Low difficulty share"}
 		}
 	}
@@ -45,15 +45,15 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	}
 	if ok {
 		if blockHex != nil {
-			reply, err := s.rpc().SubmitBlock(util.BytesToHex(blockHex))
+			reply, err := proxyServer.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
 				return false, &ErrorReply{Code: 23, Message: "Submit block error"}
 			} else {
-				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
-				s.fetchWork()
-				shareDiff := s.config.Proxy.Difficulty
+				log.Printf("Block found by miner %v@%v at height %v, id %v", session.login, session.ip, work.Height, reply)
+				proxyServer.fetchWork()
+				shareDiff := proxyServer.config.Proxy.Difficulty
 				blockHash := util.Sha256d(headerWithSol)
-				exists, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration, work.FeeReward, util.BytesToHex(util.ReverseBuffer(blockHash[:])))
+				exists, err := proxyServer.backend.WriteBlock(session.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, proxyServer.hashrateExpiration, work.FeeReward, util.BytesToHex(util.ReverseBuffer(blockHash[:])))
 
 				if exists {
 					return true, nil
@@ -69,12 +69,12 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 			}
 		}
 
-		_, err := s.backend.WriteShare(cs.login, id, params, s.config.Proxy.Difficulty, work.Height, s.hashrateExpiration)
+		_, err := proxyServer.backend.WriteShare(session.login, id, params, proxyServer.config.Proxy.Difficulty, work.Height, proxyServer.hashrateExpiration)
 		if err != nil {
 			log.Println("Failed to insert share data into backend:", err)
 		}
 
-		log.Printf("Share found by miner %v@%v at height %v", cs.login, cs.ip, work.Height)
+		log.Printf("Share found by miner %v@%v at height %v", session.login, session.ip, work.Height)
 
 		return true, nil
 	} else {
@@ -82,22 +82,22 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 	}
 }
 
-func SdiffDivDiffGe1(header []byte, work *Work) bool {
+func isShareDiffGeDiff(header []byte, minerDifficulty int64) bool {
 	headerHashed := util.Sha256d(header)
-
 	headerBig := new(big.Int).SetBytes(util.ReverseBuffer(headerHashed[:]))
 	shareDifficulty := new(big.Rat).SetFrac(util.PowLimitTest, headerBig)
-	ratCmp := new(big.Rat).Quo(shareDifficulty, new(big.Rat).SetInt64(32)).Cmp(new(big.Rat).SetInt64(1))
+	ratCmp := new(big.Rat).Quo(shareDifficulty, new(big.Rat).SetInt64(minerDifficulty)).Cmp(new(big.Rat).SetInt64(1))
 	diffOk := ratCmp >= 0
 
 	return diffOk
 }
 
-func HeaderLeTarget(header []byte, target string) bool {
+func isHeaderLeTarget(header []byte, target string) bool {
 	headerHashed := util.Sha256d(header)
 
 	x := new(big.Int).SetBytes(util.ReverseBuffer(headerHashed[:]))
 	y, _ := new(big.Int).SetString(target, 16)
 	bol := x.Cmp(y) <= 0
+
 	return bol
 }

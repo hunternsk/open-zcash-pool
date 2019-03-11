@@ -2,6 +2,7 @@
 	"threads": 2,
 	"coin": "zec",
 	"name": "main",
+	"instanceId": 1,
 	"poolAddress": "tmGoHHqgsCRuEna9YQX9zKp9ujeqGLMLEYi",
 
 	"proxy": {
@@ -38,7 +39,7 @@
 				"checkThreshold": 30,
 				"malformedLimit": 5
 			},
-			
+
 			"limits": {
 				"enabled": false,
 				"limit": 30,

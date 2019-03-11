@@ -1,10 +1,11 @@
 package proxy
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,7 +25,7 @@ type ProxyServer struct {
 	hashrateExpiration time.Duration
 	failsCount         int64
 
-	extraNonceCounter *extraNonceCounter
+	extraNonceCounter uint32
 
 	// Stratum
 	sessionsMu sync.RWMutex
@@ -48,13 +49,19 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 		log.Fatal("You must set instance name")
 	}
 
-	proxy := &ProxyServer{config: cfg, backend: backend}
-	proxy.diff = util.GetTargetHex(cfg.Proxy.Difficulty)
+	proxy := &ProxyServer{
+		config:             cfg,
+		upstreams:          make([]*rpc.RPCClient, len(cfg.Upstream)),
+		backend:            backend,
+		diff:               util.GetTargetHex(cfg.Proxy.Difficulty),
+		hashrateExpiration: util.MustParseDuration(cfg.Proxy.HashrateExpiration),
 
-	proxy.upstreams = make([]*rpc.RPCClient, len(cfg.Upstream))
-	for i, v := range cfg.Upstream {
-		proxy.upstreams[i] = rpc.NewRPCClient(v.Name, v.Url, v.Timeout)
-		log.Printf("Upstream: %s => %s", v.Name, v.Url)
+		extraNonceCounter: util.CreateExtraNonceCounter(cfg.InstanceId),
+	}
+
+	for i, upstream := range cfg.Upstream {
+		proxy.upstreams[i] = rpc.NewRPCClient(upstream.Name, upstream.Url, upstream.Timeout)
+		log.Printf("Upstream: %s => %s", upstream.Name, upstream.Url)
 	}
 	log.Printf("Default upstream: %s => %s", proxy.rpc().Name, proxy.rpc().Url)
 
@@ -65,27 +72,22 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 
 	proxy.fetchWork()
 
-	proxy.hashrateExpiration = util.MustParseDuration(cfg.Proxy.HashrateExpiration)
+	refreshInterval := util.MustParseDuration(cfg.Proxy.BlockRefreshInterval)
+	refreshTimer := time.NewTimer(refreshInterval)
+	log.Printf("Set block refresh every %v", refreshInterval)
 
-	refreshIntv := util.MustParseDuration(cfg.Proxy.BlockRefreshInterval)
-	refreshTimer := time.NewTimer(refreshIntv)
-	log.Printf("Set block refresh every %v", refreshIntv)
+	checkInterval := util.MustParseDuration(cfg.UpstreamCheckInterval)
+	checkTimer := time.NewTimer(refreshInterval)
 
-	checkIntv := util.MustParseDuration(cfg.UpstreamCheckInterval)
-	checkTimer := time.NewTimer(checkIntv)
-
-	stateUpdateIntv := util.MustParseDuration(cfg.Proxy.StateUpdateInterval)
-	stateUpdateTimer := time.NewTimer(stateUpdateIntv)
-
-	// proxy.extraNonceCounter = newExtraNonceCounter(cfg.InstanceId)
-	proxy.extraNonceCounter = newExtraNonceCounter(1)
+	stateUpdateInterval := util.MustParseDuration(cfg.Proxy.StateUpdateInterval)
+	stateUpdateTimer := time.NewTimer(stateUpdateInterval)
 
 	go func() {
 		for {
 			select {
 			case <-refreshTimer.C:
 				proxy.fetchWork()
-				refreshTimer.Reset(refreshIntv)
+				refreshTimer.Reset(refreshInterval)
 			}
 		}
 	}()
@@ -95,7 +97,7 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 			select {
 			case <-checkTimer.C:
 				proxy.checkUpstreams()
-				checkTimer.Reset(checkIntv)
+				checkTimer.Reset(checkInterval)
 			}
 		}
 	}()
@@ -104,9 +106,9 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 		for {
 			select {
 			case <-stateUpdateTimer.C:
-				t := proxy.currentWork()
-				if t != nil {
-					err := backend.WriteNodeState(cfg.Name, t.Height, t.Difficulty)
+				currentWork := proxy.currentWork()
+				if currentWork != nil {
+					err := backend.WriteNodeState(cfg.Name, currentWork.Height, currentWork.Difficulty)
 					if err != nil {
 						log.Printf("Failed to write node state to backend: %v", err)
 						proxy.markSick()
@@ -114,7 +116,7 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 						proxy.markOk()
 					}
 				}
-				stateUpdateTimer.Reset(stateUpdateIntv)
+				stateUpdateTimer.Reset(stateUpdateInterval)
 			}
 		}
 	}()
@@ -122,64 +124,56 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 	return proxy
 }
 
-func (s *ProxyServer) rpc() *rpc.RPCClient {
-	i := atomic.LoadInt32(&s.upstream)
-	return s.upstreams[i]
+func (proxyServer *ProxyServer) nextExtraNonce1() string {
+	extraNonce1 := make([]byte, 4)
+	binary.BigEndian.PutUint32(extraNonce1, proxyServer.extraNonceCounter)
+	proxyServer.extraNonceCounter += 1
+	return hex.EncodeToString(extraNonce1)
 }
 
-func (s *ProxyServer) checkUpstreams() {
+func (proxyServer *ProxyServer) rpc() *rpc.RPCClient {
+	i := atomic.LoadInt32(&proxyServer.upstream)
+	return proxyServer.upstreams[i]
+}
+
+func (proxyServer *ProxyServer) checkUpstreams() {
 	candidate := int32(0)
 	backup := false
 
-	for i, v := range s.upstreams {
-		if v.Check() && !backup {
+	for i, upstream := range proxyServer.upstreams {
+		if upstream.Check() && !backup {
 			candidate = int32(i)
 			backup = true
 		}
 	}
 
-	if s.upstream != candidate {
-		log.Printf("Switching to %v upstream", s.upstreams[candidate].Name)
-		atomic.StoreInt32(&s.upstream, candidate)
+	if proxyServer.upstream != candidate {
+		log.Printf("Switching to %v upstream", proxyServer.upstreams[candidate].Name)
+		atomic.StoreInt32(&proxyServer.upstream, candidate)
 	}
 }
 
-func (cs *Session) sendResult(id json.RawMessage, result interface{}) error {
-	message := JSONRpcResp{Id: id, Version: "2.0", Error: nil, Result: result}
-	return cs.enc.Encode(&message)
-}
-
-func (cs *Session) sendError(id json.RawMessage, reply *ErrorReply) error {
-	message := JSONRpcResp{Id: id, Version: "2.0", Error: reply}
-	return cs.enc.Encode(&message)
-}
-
-func (s *ProxyServer) writeError(w http.ResponseWriter, status int, msg string) {
-	w.WriteHeader(status)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-}
-
-func (s *ProxyServer) currentWork() *Work {
-	t := s.work.Load()
-	if t != nil {
-		return t.(*Work)
+func (proxyServer *ProxyServer) currentWork() *Work {
+	work := proxyServer.work.Load()
+	if work != nil {
+		return work.(*Work)
 	} else {
 		return nil
 	}
 }
 
-func (s *ProxyServer) markSick() {
-	atomic.AddInt64(&s.failsCount, 1)
+func (proxyServer *ProxyServer) markSick() {
+	atomic.AddInt64(&proxyServer.failsCount, 1)
 }
 
-func (s *ProxyServer) isSick() bool {
-	x := atomic.LoadInt64(&s.failsCount)
-	if s.config.Proxy.HealthCheck && x >= s.config.Proxy.MaxFails {
+func (proxyServer *ProxyServer) isSick() bool {
+	failsCount := atomic.LoadInt64(&proxyServer.failsCount)
+	if proxyServer.config.Proxy.HealthCheck && failsCount >= proxyServer.config.Proxy.MaxFails {
 		return true
 	}
 	return false
 }
 
-func (s *ProxyServer) markOk() {
-	atomic.StoreInt64(&s.failsCount, 0)
+func (proxyServer *ProxyServer) markOk() {
+	atomic.StoreInt64(&proxyServer.failsCount, 0)
 }

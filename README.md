@@ -131,6 +131,8 @@ Fields explanation:
     "coin": "zec",
     // Give unique name to each instance
     "name": "main",
+    // Unique id for each instance
+    "instanceId": 1,
     // Change to your Zcash t-address
     "poolAddress": "tmGoHHqgsCRuEna9YQX9zKp9ujeqGLMLEYi",
 
@@ -154,7 +156,7 @@ Fields explanation:
         // TTL for workers stats, usually should be equal to large hashrate window from API section
         "hashrateExpiration": "3h",
 
-        /* 
+        /*
             Reply error to miner instead of job if redis is unavailable.
             Should save electricity to miners if pool is sick and they didn't set up failovers.
         */
@@ -233,7 +235,7 @@ Fields explanation:
 
     "upstreamCheckInterval": "5s",
 
-    /* 
+    /*
         List of zcashd nodes to poll for new jobs. Pool will try to get work from
         first alive one and check in background for failed to back up.
         Current block template of the pool is always cached in RAM indeed.

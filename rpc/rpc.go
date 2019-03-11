@@ -88,8 +88,8 @@ func (r *RPCClient) GetBlockTemplate(reply interface{}) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(*rpcResp.Result, reply)
-	return err
+
+	return json.Unmarshal(*rpcResp.Result, reply)
 }
 
 func (r *RPCClient) SubmitBlock(header string) (interface{}, error) {
