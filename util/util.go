@@ -14,15 +14,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-var Ether = math.BigPow(10, 18)
-var Shannon = math.BigPow(10, 9)
+var Zcash = math.BigPow(10, 8)
+
 var PowLimitMain = new(big.Int).Sub(math.BigPow(2, 243), big.NewInt(1))
 var PowLimitTest = new(big.Int).Sub(math.BigPow(2, 251), big.NewInt(1))
-
 var pow256 = math.BigPow(2, 256)
-var addressPattern = regexp.MustCompile("^0x[0-9a-fA-F]{40}$")
+
+const FirstRewardHalvingBlock = 840000
+const pre840Reward int64 = 1000000000
+const post840Reward int64 = 625000000
+
 var tAddressPattern = regexp.MustCompile("^t[0-9a-zA-Z]{34}$")
-var zeroHash = regexp.MustCompile("^0?x?0+$")
+var loginPattern = regexp.MustCompile("^[[:alnum:]]{1,40}$")
 
 var FoundersRewardAddressChangeInterval = 17709.3125
 var TestFoundersRewardAddresses = [48]string{
@@ -76,19 +79,12 @@ var TestFoundersRewardAddresses = [48]string{
 	"t2UV2wr1PTaUiybpkV3FdSdGxUJeZdZztyt",
 }
 
-func IsValidHexAddress(s string) bool {
-	if IsZeroHash(s) || !addressPattern.MatchString(s) {
-		return false
-	}
-	return true
-}
-
 func IsValidtAddress(s string) bool {
 	return tAddressPattern.MatchString(s)
 }
 
-func IsZeroHash(s string) bool {
-	return zeroHash.MatchString(s)
+func IsValidLogin(s string) bool {
+	return loginPattern.MatchString(s)
 }
 
 func MakeTimestamp() int64 {
@@ -118,8 +114,8 @@ func FormatReward(reward *big.Int) string {
 }
 
 func FormatRatReward(reward *big.Rat) string {
-	wei := new(big.Rat).SetInt(Ether)
-	reward = reward.Quo(reward, wei)
+	zatoshi := new(big.Rat).SetInt(Zcash)
+	reward = reward.Quo(reward, zatoshi)
 	return reward.FloatString(8)
 }
 
@@ -205,6 +201,10 @@ func ReverseUInt32(x uint32) uint32 {
 		(uint32(x)&0x000000ff)<<24
 }
 
+func ReverseHex(hex string) string {
+	return BytesToHex(ReverseBuffer(HexToBytes(hex)))
+}
+
 func readHex(s string, n int) ([]byte, error) {
 	if len(s) > 2*n {
 		return nil, errors.New("value oversized")
@@ -239,8 +239,16 @@ func Sha256d(decrypted []byte) [32]byte {
 	return sha256.Sum256(round1[:])
 }
 
-// func HexToInt
+func GetConstReward(height int64) *big.Int {
+	if height >= FirstRewardHalvingBlock {
+		return big.NewInt(post840Reward)
+	}
+	return big.NewInt(pre840Reward)
+}
+func CreateExtraNonceCounter(seed uint32) uint32 {
+	return seed << 27
+}
 
-// func IntToByte
-
-// func ByteToInt
+func GetHexTimestamp() string {
+	return BytesToHex([]byte(time.Now().String()))
+}

@@ -55,73 +55,73 @@ func NewApiServer(cfg *ApiConfig, backend *storage.RedisClient) *ApiServer {
 	}
 }
 
-func (s *ApiServer) Start() {
-	if s.config.PurgeOnly {
+func (apiServer *ApiServer) Start() {
+	if apiServer.config.PurgeOnly {
 		log.Printf("Starting API in purge-only mode")
 	} else {
-		log.Printf("Starting API on %v", s.config.Listen)
+		log.Printf("Starting API on %v", apiServer.config.Listen)
 	}
 
-	s.statsIntv = util.MustParseDuration(s.config.StatsCollectInterval)
-	statsTimer := time.NewTimer(s.statsIntv)
-	log.Printf("Set stats collect interval to %v", s.statsIntv)
+	apiServer.statsIntv = util.MustParseDuration(apiServer.config.StatsCollectInterval)
+	statsTimer := time.NewTimer(apiServer.statsIntv)
+	log.Printf("Set stats collect interval to %v", apiServer.statsIntv)
 
-	purgeIntv := util.MustParseDuration(s.config.PurgeInterval)
+	purgeIntv := util.MustParseDuration(apiServer.config.PurgeInterval)
 	purgeTimer := time.NewTimer(purgeIntv)
 	log.Printf("Set purge interval to %v", purgeIntv)
 
-	sort.Ints(s.config.LuckWindow)
+	sort.Ints(apiServer.config.LuckWindow)
 
-	if s.config.PurgeOnly {
-		s.purgeStale()
+	if apiServer.config.PurgeOnly {
+		apiServer.purgeStale()
 	} else {
-		s.purgeStale()
-		s.collectStats()
+		apiServer.purgeStale()
+		apiServer.collectStats()
 	}
 
 	go func() {
 		for {
 			select {
 			case <-statsTimer.C:
-				if !s.config.PurgeOnly {
-					s.collectStats()
+				if !apiServer.config.PurgeOnly {
+					apiServer.collectStats()
 				}
-				statsTimer.Reset(s.statsIntv)
+				statsTimer.Reset(apiServer.statsIntv)
 			case <-purgeTimer.C:
-				s.purgeStale()
+				apiServer.purgeStale()
 				purgeTimer.Reset(purgeIntv)
 			}
 		}
 	}()
 
-	if !s.config.PurgeOnly {
-		s.listen()
+	if !apiServer.config.PurgeOnly {
+		apiServer.listen()
 	}
 }
 
-func (s *ApiServer) listen() {
-	r := mux.NewRouter()
-	r.HandleFunc("/api/stats", s.StatsIndex)
-	r.HandleFunc("/api/miners", s.MinersIndex)
-	r.HandleFunc("/api/blocks", s.BlocksIndex)
-	r.HandleFunc("/api/accounts/{login:t[0-9a-zA-Z]{34}}", s.AccountIndex)
-	r.NotFoundHandler = http.HandlerFunc(notFound)
-	err := http.ListenAndServe(s.config.Listen, r)
+func (apiServer *ApiServer) listen() {
+	router := mux.NewRouter()
+	router.HandleFunc("/api/stats", apiServer.StatsIndex)
+	router.HandleFunc("/api/miners", apiServer.MinersIndex)
+	router.HandleFunc("/api/blocks", apiServer.BlocksIndex)
+	router.HandleFunc("/api/accounts/{login:t[0-9a-zA-Z]{34}}", apiServer.AccountIndex)
+	router.NotFoundHandler = http.HandlerFunc(notFound)
+	err := http.ListenAndServe(apiServer.config.Listen, router)
 	if err != nil {
 		log.Fatalf("Failed to start API: %v", err)
 	}
 }
 
-func notFound(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusNotFound)
+func notFound(writer http.ResponseWriter, _ *http.Request) {
+	writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.WriteHeader(http.StatusNotFound)
 }
 
-func (s *ApiServer) purgeStale() {
+func (apiServer *ApiServer) purgeStale() {
 	start := time.Now()
-	total, err := s.backend.FlushStaleStats(s.hashrateWindow, s.hashrateLargeWindow)
+	total, err := apiServer.backend.FlushStaleStats(apiServer.hashrateWindow, apiServer.hashrateLargeWindow)
 	if err != nil {
 		log.Println("Failed to purge stale data from backend:", err)
 	} else {
@@ -129,38 +129,38 @@ func (s *ApiServer) purgeStale() {
 	}
 }
 
-func (s *ApiServer) collectStats() {
+func (apiServer *ApiServer) collectStats() {
 	start := time.Now()
-	stats, err := s.backend.CollectStats(s.hashrateWindow, s.config.Blocks)
+	stats, err := apiServer.backend.CollectStats(apiServer.hashrateWindow, apiServer.config.Blocks)
 	if err != nil {
 		log.Printf("Failed to fetch stats from backend: %v", err)
 		return
 	}
-	if len(s.config.LuckWindow) > 0 {
-		stats["luck"], err = s.backend.CollectLuckStats(s.config.LuckWindow)
+	if len(apiServer.config.LuckWindow) > 0 {
+		stats["luck"], err = apiServer.backend.CollectLuckStats(apiServer.config.LuckWindow)
 		if err != nil {
 			log.Printf("Failed to fetch luck stats from backend: %v", err)
 			return
 		}
 	}
-	s.stats.Store(stats)
+	apiServer.stats.Store(stats)
 	log.Printf("Stats collection finished %s", time.Since(start))
 }
 
-func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
+func (apiServer *ApiServer) StatsIndex(writer http.ResponseWriter, _ *http.Request) {
+	writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.WriteHeader(http.StatusOK)
 
 	reply := make(map[string]interface{})
-	nodes, err := s.backend.GetNodeStates()
+	nodes, err := apiServer.backend.GetNodeStates()
 	if err != nil {
 		log.Printf("Failed to get nodes stats from backend: %v", err)
 	}
 	reply["nodes"] = nodes
 
-	stats := s.getStats()
+	stats := apiServer.getStats()
 	if stats != nil {
 		reply["now"] = util.MakeTimestamp()
 		reply["stats"] = stats["stats"]
@@ -171,20 +171,20 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 		reply["candidatesTotal"] = stats["candidatesTotal"]
 	}
 
-	err = json.NewEncoder(w).Encode(reply)
+	err = json.NewEncoder(writer).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}
 }
 
-func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
+func (apiServer *ApiServer) MinersIndex(writer http.ResponseWriter, _ *http.Request) {
+	writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.WriteHeader(http.StatusOK)
 
 	reply := make(map[string]interface{})
-	stats := s.getStats()
+	stats := apiServer.getStats()
 	if stats != nil {
 		reply["now"] = util.MakeTimestamp()
 		reply["miners"] = stats["miners"]
@@ -192,20 +192,20 @@ func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
 		reply["minersTotal"] = stats["minersTotal"]
 	}
 
-	err := json.NewEncoder(w).Encode(reply)
+	err := json.NewEncoder(writer).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}
 }
 
-func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
+func (apiServer *ApiServer) BlocksIndex(writer http.ResponseWriter, _ *http.Request) {
+	writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.WriteHeader(http.StatusOK)
 
 	reply := make(map[string]interface{})
-	stats := s.getStats()
+	stats := apiServer.getStats()
 	if stats != nil {
 		reply["matured"] = stats["matured"]
 		reply["maturedTotal"] = stats["maturedTotal"]
@@ -216,46 +216,46 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		reply["luck"] = stats["luck"]
 	}
 
-	err := json.NewEncoder(w).Encode(reply)
+	err := json.NewEncoder(writer).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}
 }
 
-func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
+func (apiServer *ApiServer) AccountIndex(writer http.ResponseWriter, r *http.Request) {
+	writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
 
 	login := mux.Vars(r)["login"]
-	s.minersMu.Lock()
-	defer s.minersMu.Unlock()
+	apiServer.minersMu.Lock()
+	defer apiServer.minersMu.Unlock()
 
-	reply, ok := s.miners[login]
+	reply, ok := apiServer.miners[login]
 	now := util.MakeTimestamp()
-	cacheIntv := int64(s.statsIntv / time.Millisecond)
+	cacheIntv := int64(apiServer.statsIntv / time.Millisecond)
 	// Refresh stats if stale
 	if !ok || reply.updatedAt < now-cacheIntv {
-		exist, err := s.backend.IsMinerExists(login)
+		exist, err := apiServer.backend.IsMinerExists(login)
 		if !exist {
-			w.WriteHeader(http.StatusNotFound)
+			writer.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			writer.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
 			return
 		}
 
-		stats, err := s.backend.GetMinerStats(login)
+		stats, err := apiServer.backend.GetMinerStats(login)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			writer.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
 			return
 		}
-		workers, err := s.backend.CollectWorkersStats(s.hashrateWindow, s.hashrateLargeWindow, login)
+		workers, err := apiServer.backend.CollectWorkersStats(apiServer.hashrateWindow, apiServer.hashrateLargeWindow, login)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			writer.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
 			return
 		}
@@ -264,18 +264,18 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 		}
 
 		reply = &Entry{stats: stats, updatedAt: now}
-		s.miners[login] = reply
+		apiServer.miners[login] = reply
 	}
 
-	w.WriteHeader(http.StatusOK)
-	err := json.NewEncoder(w).Encode(reply.stats)
+	writer.WriteHeader(http.StatusOK)
+	err := json.NewEncoder(writer).Encode(reply.stats)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}
 }
 
-func (s *ApiServer) getStats() map[string]interface{} {
-	stats := s.stats.Load()
+func (apiServer *ApiServer) getStats() map[string]interface{} {
+	stats := apiServer.stats.Load()
 	if stats != nil {
 		return stats.(map[string]interface{})
 	}

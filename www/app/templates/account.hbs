@@ -5,13 +5,13 @@
       <div class="col-md-4 stats">
         <div style="display: block;">
           <i class="fa fa-cloud"></i> Immature Balance: <span>{{format-balance model.stats.immature}}</span><br>
-          <small>Preliminary balance awaiting blocks to mature.</small>
+          <small>Preliminary balance.</small>
         </div>
         <div style="display: block;">
-          <i class="fa fa-bank"></i> Pending Balance: <span>{{format-balance model.stats.balance}}</span><br>
-          <small>Credited coins awaiting payout.</small>
+          <i class="fa fa-bank"></i> Mature Balance: <span>{{format-balance model.stats.balance}}</span><br>
+          <small>Balance available for spending.</small>
         </div>
-        <div style="display: block;"><i class="fa fa-money"></i> Total Paid: <span>{{format-balance model.stats.paid}}</span></div>
+        {{!-- <div style="display: block;"><i class="fa fa-money"></i> Total Paid: <span>{{format-balance model.stats.paid}}</span></div> --}}
       </div>
       <div class="col-md-4 stats">
         <div style="display: block;"><i class="fa fa-gears"></i> Workers Online: <span>{{format-number model.workersOnline}}</span></div>
