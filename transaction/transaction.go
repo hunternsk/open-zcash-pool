@@ -56,19 +56,10 @@ func BuildCoinbaseTxn(blockHeight int64, poolAddress string, foundersRewardZatos
 	index := int(math.Floor(float64(blockHeight) / util.FoundersRewardAddressChangeInterval))
 
 	poolAddressScriptFormat, _ := zaddr.DecodeAddress(poolAddress, &chaincfg.TestNet3Params)
-	foundersAddressScriptFormat, _ := zaddr.DecodeAddress(util.TestFoundersRewardAddresses[index], &chaincfg.TestNet3Params)
-
 	poolScript, _ := zaddr.PayToAddrScript(poolAddressScriptFormat)
-	founderScript, _ := zaddr.PayToAddrScript(foundersAddressScriptFormat)
-
 	outputPool := zecl.Output{
-		Value:        1250000000 - foundersRewardZatoshi + feeReward,
+		Value:        util.GetConstReward(blockHeight).Int64() + feeReward,
 		ScriptPubKey: poolScript,
-	}
-
-	outputFounders := zecl.Output{
-		Value:        foundersRewardZatoshi,
-		ScriptPubKey: founderScript,
 	}
 
 	transaction := zecl.Transaction{
@@ -80,7 +71,18 @@ func BuildCoinbaseTxn(blockHeight int64, poolAddress string, foundersRewardZatos
 		ValueBalance:          0,
 		TemporaryUnknownValue: 0,
 		Inputs:                []zecl.Input{input},
-		Outputs:               []zecl.Output{outputPool, outputFounders},
+		Outputs:               []zecl.Output{outputPool},
+	}
+
+	if blockHeight < util.FirstRewardHalvingBlock {
+		foundersAddressScriptFormat, _ := zaddr.DecodeAddress(util.TestFoundersRewardAddresses[index], &chaincfg.TestNet3Params)
+		founderScript, _ := zaddr.PayToAddrScript(foundersAddressScriptFormat)
+		outputFounders := zecl.Output{
+			Value:        foundersRewardZatoshi,
+			ScriptPubKey: founderScript,
+		}
+
+		transaction.Outputs = append(transaction.Outputs, outputFounders)
 	}
 
 	transactionBytes, _ := transaction.MarshalBinary()
