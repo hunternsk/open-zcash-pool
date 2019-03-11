@@ -52,7 +52,8 @@ func (s *ProxyServer) processShare(cs *Session, id string, params []string) (boo
 				log.Printf("Block found by miner %v@%v at height %v, id %v", cs.login, cs.ip, work.Height, reply)
 				s.fetchWork()
 				shareDiff := s.config.Proxy.Difficulty
-				exists, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration)
+				blockHash := util.Sha256d(headerWithSol)
+				exists, err := s.backend.WriteBlock(cs.login, id, params, shareDiff, work.Difficulty.Int64(), work.Height, s.hashrateExpiration, work.FeeReward, util.BytesToHex(util.ReverseBuffer(blockHash[:])))
 
 				if exists {
 					return true, nil

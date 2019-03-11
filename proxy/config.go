@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"github.com/jkkgbe/open-zcash-pool/api"
+	"github.com/jkkgbe/open-zcash-pool/payouts"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
 
@@ -20,7 +21,8 @@ type Config struct {
 	Coin  string         `json:"coin"`
 	Redis storage.Config `json:"redis"`
 
-	NewrelicName    string `json:"newrelicName"`
+	BlockUnlocker payouts.UnlockerConfig `json:"unlocker"`
+
 	NewrelicKey     string `json:"newrelicKey"`
 	NewrelicVerbose bool   `json:"newrelicVerbose"`
 	NewrelicEnabled bool   `json:"newrelicEnabled"`

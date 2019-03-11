@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jkkgbe/open-zcash-pool/api"
+	"github.com/jkkgbe/open-zcash-pool/payouts"
 	"github.com/jkkgbe/open-zcash-pool/proxy"
 	"github.com/jkkgbe/open-zcash-pool/storage"
 )
@@ -30,6 +31,11 @@ func startProxy() {
 func startApi() {
 	s := api.NewApiServer(&cfg.Api, backend)
 	s.Start()
+}
+
+func startBlockUnlocker() {
+	u := payouts.NewBlockUnlocker(&cfg.BlockUnlocker, backend)
+	u.Start()
 }
 
 func readConfig(cfg *proxy.Config) {
@@ -74,7 +80,9 @@ func main() {
 	if cfg.Api.Enabled {
 		go startApi()
 	}
-
+	if cfg.BlockUnlocker.Enabled {
+		go startBlockUnlocker()
+	}
 	quit := make(chan bool)
 	<-quit
 }

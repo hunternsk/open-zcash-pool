@@ -14,15 +14,20 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-var Ether = math.BigPow(10, 18)
-var Shannon = math.BigPow(10, 9)
+var Zcash = math.BigPow(10, 8)
+
+// var Shannon = math.BigPow(10, 9)
 var PowLimitMain = new(big.Int).Sub(math.BigPow(2, 243), big.NewInt(1))
 var PowLimitTest = new(big.Int).Sub(math.BigPow(2, 251), big.NewInt(1))
-
 var pow256 = math.BigPow(2, 256)
-var addressPattern = regexp.MustCompile("^0x[0-9a-fA-F]{40}$")
+
+const firstRewardHalvingBlock = 840000
+const pre840Reward int64 = 1000000000
+const post840Reward int64 = 625000000
+
+// var addressPattern = regexp.MustCompile("^0x[0-9a-fA-F]{40}$")
 var tAddressPattern = regexp.MustCompile("^t[0-9a-zA-Z]{34}$")
-var loginPattern = regexp.MustCompile("^[[:alnum:]]{,40}$")
+var loginPattern = regexp.MustCompile("^[[:alnum:]]{1,40}$")
 var zeroHash = regexp.MustCompile("^0?x?0+$")
 
 var FoundersRewardAddressChangeInterval = 17709.3125
@@ -77,12 +82,12 @@ var TestFoundersRewardAddresses = [48]string{
 	"t2UV2wr1PTaUiybpkV3FdSdGxUJeZdZztyt",
 }
 
-func IsValidHexAddress(s string) bool {
-	if IsZeroHash(s) || !addressPattern.MatchString(s) {
-		return false
-	}
-	return true
-}
+// func IsValidHexAddress(s string) bool {
+// 	if IsZeroHash(s) || !addressPattern.MatchString(s) {
+// 		return false
+// 	}
+// 	return true
+// }
 
 func IsValidtAddress(s string) bool {
 	return tAddressPattern.MatchString(s)
@@ -123,8 +128,8 @@ func FormatReward(reward *big.Int) string {
 }
 
 func FormatRatReward(reward *big.Rat) string {
-	wei := new(big.Rat).SetInt(Ether)
-	reward = reward.Quo(reward, wei)
+	zatoshi := new(big.Rat).SetInt(Zcash)
+	reward = reward.Quo(reward, zatoshi)
 	return reward.FloatString(8)
 }
 
@@ -242,6 +247,13 @@ func HexToUInt32(s string) uint32 {
 func Sha256d(decrypted []byte) [32]byte {
 	round1 := sha256.Sum256(decrypted)
 	return sha256.Sum256(round1[:])
+}
+
+func GetConstReward(height int64) *big.Int {
+	if height >= firstRewardHalvingBlock {
+		return big.NewInt(post840Reward)
+	}
+	return big.NewInt(pre840Reward)
 }
 
 // func HexToInt

@@ -45,7 +45,7 @@ type BlockTemplate struct {
 	SizeLimit            int           `json:"sizelimit"`
 	CurTime              uint32        `json:"curtime"`
 	Bits                 string        `json:"bits"`
-	Height               uint64        `json:"height"`
+	Height               int64         `json:"height"`
 }
 
 type Work struct {
@@ -57,11 +57,12 @@ type Work struct {
 	Time                 string
 	Bits                 string
 	Target               string
-	Height               uint64
+	Height               int64
 	Difficulty           *big.Int
 	CleanJobs            bool
 	Template             *BlockTemplate
 	GeneratedCoinbase    []byte
+	FeeReward            int64
 }
 
 func (s *ProxyServer) fetchWork() {
@@ -116,6 +117,7 @@ func (s *ProxyServer) fetchWork() {
 		CleanJobs:            true,
 		Template:             &reply,
 		GeneratedCoinbase:    coinbaseTxn,
+		FeeReward:            feeReward,
 	}
 
 	s.work.Store(&newWork)
