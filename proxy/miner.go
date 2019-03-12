@@ -45,11 +45,11 @@ func (proxyServer *ProxyServer) processShare(session *Session, id string, params
 	}
 	if ok {
 		if blockHex != nil {
-			reply, err := proxyServer.rpc().SubmitBlock(util.BytesToHex(blockHex))
+			_, err := proxyServer.rpc().SubmitBlock(util.BytesToHex(blockHex))
 			if err != nil {
 				return false, &ErrorReply{Code: 23, Message: "Submit block error"}
 			} else {
-				log.Printf("Block found by miner %v@%v at height %v, id %v", session.login, session.ip, work.Height, reply)
+				log.Printf("Block found by miner %v@%v at height %v", session.login, session.ip, work.Height)
 				proxyServer.fetchWork()
 				shareDiff := proxyServer.config.Proxy.Difficulty
 				blockHash := util.Sha256d(headerWithSol)

@@ -120,7 +120,7 @@ func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData, blockT
 					return nil, err
 				}
 				result.maturedBlocks = append(result.maturedBlocks, candidate)
-				log.Printf("Mature block %v with %v tx, hash: %v", candidate.Height, len(block.Transactions), candidate.Hash[0:10])
+				log.Printf("Mature block %v with %v tx, hash: %v", candidate.Height, len(block.Transactions), candidate.Hash)
 				break
 			}
 
@@ -237,11 +237,9 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 		totalPoolProfit.Add(totalPoolProfit, poolProfit)
 
 		logEntry := fmt.Sprintf(
-			"IMMATURE %v: revenue %v, miners profit %v, pool profit: %v",
+			"IMMATURE %v: revenue %v",
 			block.RoundKey(),
 			util.FormatRatReward(revenue),
-			util.FormatRatReward(minersProfit),
-			util.FormatRatReward(poolProfit),
 		)
 		entries := []string{logEntry}
 		for login, reward := range roundRewards {
@@ -251,10 +249,8 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 	}
 
 	log.Printf(
-		"IMMATURE SESSION: revenue %v, miners profit %v, pool profit: %v",
+		"IMMATURE SESSION: revenue %v",
 		util.FormatRatReward(totalRevenue),
-		util.FormatRatReward(totalMinersProfit),
-		util.FormatRatReward(totalPoolProfit),
 	)
 }
 
@@ -330,11 +326,9 @@ func (u *BlockUnlocker) unlockAndCreditMiners() {
 		totalPoolProfit.Add(totalPoolProfit, poolProfit)
 
 		logEntry := fmt.Sprintf(
-			"MATURED %v: revenue %v, miners profit %v, pool profit: %v",
+			"MATURED %v: revenue %v",
 			block.RoundKey(),
 			util.FormatRatReward(revenue),
-			util.FormatRatReward(minersProfit),
-			util.FormatRatReward(poolProfit),
 		)
 		entries := []string{logEntry}
 		for login, reward := range roundRewards {
@@ -344,10 +338,8 @@ func (u *BlockUnlocker) unlockAndCreditMiners() {
 	}
 
 	log.Printf(
-		"MATURE SESSION: revenue %v, miners profit %v, pool profit: %v",
+		"MATURE SESSION: revenue %v",
 		util.FormatRatReward(totalRevenue),
-		util.FormatRatReward(totalMinersProfit),
-		util.FormatRatReward(totalPoolProfit),
 	)
 }
 

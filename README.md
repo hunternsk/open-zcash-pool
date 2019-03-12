@@ -8,7 +8,7 @@
 &emsp;✓ Miner stats\
 &emsp;✓ Mined blocks\
 ✗ Multi-miner mining (with many miners)\
-✗ Unlocker\
+✓ Unlocker\
 ✗ Payouts
 
 ### Building on Linux
@@ -131,7 +131,7 @@ Fields explanation:
     "coin": "zec",
     // Give unique name to each instance
     "name": "main",
-    // Unique id for each instance
+    // Unique id for each pool (miner module) instance
     "instanceId": 1,
     // Change to your Zcash t-address
     "poolAddress": "tmGoHHqgsCRuEna9YQX9zKp9ujeqGLMLEYi",
@@ -262,7 +262,30 @@ Fields explanation:
         "poolSize": 10,
         "database": 0,
         "password": ""
-    }
+    },
+
+  // This module periodically remits Zcash to miners
+  	"unlocker": {
+        "enabled": true,
+        // Pool fee percentage (currently disabled)
+        "poolFee": 0,
+        // Pool fees beneficiary address (leave it blank to disable fee withdrawals, currently disabled)
+        "poolFeeAddress": "",
+        // Donate 10% from pool fees to developers (currently disabled)
+        "donate": false,
+        // Unlock only if a block has at least this amount of confirmations (Zcash maturity time is 100, set higher for extra safety)
+        "depth": 100,
+        // How many blocks should be mined before the pool confirms with the RPC that our block has been accepted by the blockchain
+        "immatureDepth": 20,
+        // Keep mined transaction fees as pool fees (currently disabled)
+        "keepTxFees": false,
+        // Run unlocker in this interval
+        "interval": "10m",
+        // Zcashd instance node rpc endpoint for unlocking blocks
+        "daemon": "http://yourZcashNodeUsername:yourZcashNodePassword@127.0.0.1:18232",
+        // Rise error if can't reach zcashd in this amount of time
+		"timeout": "10s"
+	}
 }
 ```
 

@@ -81,5 +81,18 @@
 		"poolSize": 10,
 		"database": 0,
 		"password": ""
+	},
+
+	"unlocker": {
+		"enabled": true,
+		"poolFee": 0,
+		"poolFeeAddress": "",
+		"donate": false,
+		"depth": 100,
+		"immatureDepth": 20,
+		"keepTxFees": false,
+		"interval": "10m",
+		"daemon": "http://yourZcashNodeUsername:yourZcashNodePassword@127.0.0.1:18232",
+		"timeout": "10s"
 	}
 }
