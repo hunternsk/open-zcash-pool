@@ -1,4 +1,5 @@
-"name": "zcash_testnet",
+{
+	"name": "zcash_testnet",
     "symbol": "taz",
     "algorithm": "equihash",
 
@@ -56,4 +57,4 @@
 		"t2Urdy1ERfkvsFuy6Z4BkhvYGzWdmivfAFR",
 		"t2ADinR4JrvCMd4Q1XGALPajzFrirqvhED6"
 	]
-};
+}

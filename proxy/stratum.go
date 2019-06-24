@@ -3,7 +3,6 @@ package proxy
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -16,11 +15,11 @@ const (
 	MaxReqSize = 10240
 )
 
-func (s *ProxyServer) ListenTCP() {
-	timeout := util.MustParseDuration(s.config.Proxy.Stratum.Timeout)
-	s.timeout = timeout
+func (proxyServer *ProxyServer) ListenTCP() {
+	timeout := util.MustParseDuration(proxyServer.config.Proxy.Stratum.Timeout)
+	proxyServer.timeout = timeout
 
-	addr, err := net.ResolveTCPAddr("tcp", s.config.Proxy.Stratum.Listen)
+	addr, err := net.ResolveTCPAddr("tcp", proxyServer.config.Proxy.Stratum.Listen)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -30,8 +29,8 @@ func (s *ProxyServer) ListenTCP() {
 	}
 	defer server.Close()
 
-	log.Printf("Stratum listening on %s", s.config.Proxy.Stratum.Listen)
-	var accept = make(chan int, s.config.Proxy.Stratum.MaxConn)
+	log.Printf("Stratum listening on %s", proxyServer.config.Proxy.Stratum.Listen)
+	var accept = make(chan int, proxyServer.config.Proxy.Stratum.MaxConn)
 	n := 0
 
 	for {
@@ -43,40 +42,34 @@ func (s *ProxyServer) ListenTCP() {
 
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if s.policy.IsBanned(ip) || !s.policy.ApplyLimitPolicy(ip) {
-			conn.Close()
-			continue
-		}
 		n += 1
-		cs := &Session{conn: conn, ip: ip}
+		session := &Session{conn: conn, ip: ip}
 
 		accept <- n
-		go func(cs *Session) {
-			err = s.handleTCPClient(cs)
+		go func(session *Session) {
+			err = proxyServer.handleTCPClient(session)
 			if err != nil {
-				s.removeSession(cs)
+				proxyServer.removeSession(session)
 				conn.Close()
 			}
 			<-accept
-		}(cs)
+		}(session)
 	}
 }
 
-func (s *ProxyServer) handleTCPClient(cs *Session) error {
-	cs.enc = json.NewEncoder(cs.conn)
-	connbuff := bufio.NewReaderSize(cs.conn, MaxReqSize)
-	s.setDeadline(cs.conn)
+func (proxyServer *ProxyServer) handleTCPClient(session *Session) error {
+	session.enc = json.NewEncoder(session.conn)
+	connbuff := bufio.NewReaderSize(session.conn, MaxReqSize)
+	proxyServer.setDeadline(session.conn)
 
 	for {
 		data, isPrefix, err := connbuff.ReadLine()
 		if isPrefix {
-			fmt.Println(string(data))
-			log.Printf("Socket flood detected from %s", cs.ip)
-			s.policy.BanClient(cs.ip)
+			log.Printf("Socket flood detected from %s", session.ip)
 			return err
 		} else if err == io.EOF {
-			log.Printf("Client %s disconnected", cs.ip)
-			s.removeSession(cs)
+			log.Printf("Client %s disconnected", session.ip)
+			proxyServer.removeSession(session)
 			break
 		} else if err != nil {
 			log.Printf("Error reading from socket: %v", err)
@@ -87,12 +80,11 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 			var req StratumReq
 			err = json.Unmarshal(data, &req)
 			if err != nil {
-				s.policy.ApplyMalformedPolicy(cs.ip)
-				log.Printf("Malformed stratum request from %s: %v", cs.ip, err)
+				log.Printf("Malformed stratum request from %s: %v", session.ip, err)
 				return err
 			}
-			s.setDeadline(cs.conn)
-			err = cs.handleTCPMessage(s, &req)
+			proxyServer.setDeadline(session.conn)
+			err = session.handleTCPMessage(proxyServer, &req)
 			if err != nil {
 				return err
 			}
@@ -101,11 +93,11 @@ func (s *ProxyServer) handleTCPClient(cs *Session) error {
 	return nil
 }
 
-func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
+func (session *Session) handleTCPMessage(proxyServer *ProxyServer, req *StratumReq) error {
 	var params []string
 	err := json.Unmarshal(req.Params, &params)
 	if err != nil {
-		log.Println("Malformed stratum request params from", cs.ip)
+		log.Println("Malformed stratum request params from", session.ip)
 		return err
 	}
 
@@ -114,125 +106,115 @@ func (cs *Session) handleTCPMessage(s *ProxyServer, req *StratumReq) error {
 	// Handle RPC methods
 	switch req.Method {
 	case "mining.subscribe":
-		extraNonce1 := s.extraNonceCounter.getNextExtraNonce1()
-		reply = s.handleSubscribeRPC(cs, extraNonce1)
-		fmt.Println("mining.subscribe", params, reply, errReply)
+		extraNonce1 := proxyServer.nextExtraNonce1()
+		reply = proxyServer.handleSubscribeRPC(session, extraNonce1)
 	case "mining.authorize":
-		reply, errReply = s.handleAuthorizeRPC(cs, params)
-		fmt.Println("mining.authorize", params, reply, errReply)
+		reply, errReply = proxyServer.handleAuthorizeRPC(session, params)
 		if errReply != nil {
-			return cs.sendTCPError(req.Id, errReply)
+			return session.sendTCPError(req.Id, errReply)
 		}
-		cs.sendTCPResult(req.Id, reply)
-		// TODO set_target
-		var d = []interface{}{s.diff}
-		cs.setTarget(&d)
-		t := s.currentWork()
-		if t == nil || s.isSick() {
+		session.sendTCPResult(req.Id, reply)
+
+		var diff = []interface{}{proxyServer.diff}
+		session.setTarget(&diff)
+		currentWork := proxyServer.currentWork()
+		if currentWork == nil || proxyServer.isSick() {
 			return nil
 		}
-		reply := t.CreateJob()
-		return cs.pushNewJob(&reply)
+		reply := currentWork.CreateJob()
+		return session.pushNewJob(&reply)
 	case "mining.submit":
-		reply, errReply = s.handleTCPSubmitRPC(cs, params, req.Worker)
-		fmt.Println("mining.submit", params, reply, errReply)
+		reply, errReply = proxyServer.handleTCPSubmitRPC(session, params, req.Worker)
 	case "mining.extranonce.subscribe":
 		errReply = &ErrorReply{Code: 20, Message: "Not supported."}
-		fmt.Println("mining.extranonce.subscribe", params, reply, errReply)
 	default:
-		errReply = s.handleUnknownRPC(cs, req.Method)
+		errReply = proxyServer.handleUnknownRPC(session, req.Method)
 	}
 
 	if errReply != nil {
-		return cs.sendTCPError(req.Id, errReply)
+		return session.sendTCPError(req.Id, errReply)
 	}
-	return cs.sendTCPResult(req.Id, reply)
+
+	return session.sendTCPResult(req.Id, reply)
 }
 
-func (cs *Session) sendTCPResult(id json.RawMessage, result interface{}) error {
-	cs.Lock()
-	defer cs.Unlock()
+func (session *Session) sendTCPResult(id json.RawMessage, result interface{}) error {
+	session.Lock()
+	defer session.Unlock()
 
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: nil, Result: result}
-	return cs.enc.Encode(&message)
+	return session.enc.Encode(&message)
 }
 
-func (cs *Session) setTarget(params *[]interface{}) error {
-	cs.Lock()
-	defer cs.Unlock()
+func (session *Session) setTarget(params *[]interface{}) error {
+	session.Lock()
+	defer session.Unlock()
 	message := JSONPushMessage{Version: "2.0", Method: "mining.set_target", Params: *params, Id: 0}
-	fmt.Println("setTarget", &message)
-	return cs.enc.Encode(&message)
+	return session.enc.Encode(&message)
 }
 
-func (cs *Session) pushNewJob(params *[]interface{}) error {
-	cs.Lock()
-	defer cs.Unlock()
+func (session *Session) pushNewJob(params *[]interface{}) error {
+	session.Lock()
+	defer session.Unlock()
 	message := JSONPushMessage{Version: "2.0", Method: "mining.notify", Params: *params, Id: 0}
-	fmt.Println("pushNewJob", message)
-	return cs.enc.Encode(&message)
+	return session.enc.Encode(&message)
 }
 
-func (cs *Session) sendTCPError(id json.RawMessage, reply *ErrorReply) error {
-	cs.Lock()
-	defer cs.Unlock()
+func (session *Session) sendTCPError(id json.RawMessage, reply *ErrorReply) error {
+	session.Lock()
+	defer session.Unlock()
 
 	message := JSONRpcResp{Id: id, Version: "2.0", Error: reply}
-	return cs.enc.Encode(&message)
-	// err := cs.enc.Encode(&message)
-	// if err != nil {
-	// return err
-	// }
-	// return errors.New(reply.Message)
+	return session.enc.Encode(&message)
 }
 
-func (self *ProxyServer) setDeadline(conn *net.TCPConn) {
-	conn.SetDeadline(time.Now().Add(self.timeout))
+func (proxyServer *ProxyServer) setDeadline(conn *net.TCPConn) {
+	conn.SetDeadline(time.Now().Add(proxyServer.timeout))
 }
 
-func (s *ProxyServer) registerSession(cs *Session) {
-	s.sessionsMu.Lock()
-	defer s.sessionsMu.Unlock()
-	s.sessions[cs] = struct{}{}
+func (proxyServer *ProxyServer) registerSession(session *Session) {
+	proxyServer.sessionsMu.Lock()
+	defer proxyServer.sessionsMu.Unlock()
+	proxyServer.sessions[session] = struct{}{}
 }
 
-func (s *ProxyServer) removeSession(cs *Session) {
-	s.sessionsMu.Lock()
-	defer s.sessionsMu.Unlock()
-	delete(s.sessions, cs)
+func (proxyServer *ProxyServer) removeSession(session *Session) {
+	proxyServer.sessionsMu.Lock()
+	defer proxyServer.sessionsMu.Unlock()
+	delete(proxyServer.sessions, session)
 }
 
-func (s *ProxyServer) broadcastNewJobs() {
-	t := s.currentWork()
-	// if t == nil || len(t.Header) == 0 || s.isSick() {
-	if t == nil || s.isSick() {
+func (proxyServer *ProxyServer) broadcastNewJobs() {
+	currentWork := proxyServer.currentWork()
+
+	if currentWork == nil || proxyServer.isSick() {
 		return
 	}
-	reply := t.CreateJob()
+	reply := currentWork.CreateJob()
 
-	s.sessionsMu.RLock()
-	defer s.sessionsMu.RUnlock()
+	proxyServer.sessionsMu.RLock()
+	defer proxyServer.sessionsMu.RUnlock()
 
-	count := len(s.sessions)
+	count := len(proxyServer.sessions)
 	log.Printf("Broadcasting new job to %v stratum miners", count)
 
 	start := time.Now()
 	bcast := make(chan int, 1024)
 	n := 0
-	for m, _ := range s.sessions {
+	for miner := range proxyServer.sessions {
 		n++
 		bcast <- n
 
-		go func(cs *Session) {
-			err := cs.pushNewJob(&reply)
+		go func(session *Session) {
+			err := session.pushNewJob(&reply)
 			<-bcast
 			if err != nil {
-				log.Printf("Job transmit error to %v@%v: %v", cs.login, cs.ip, err)
-				s.removeSession(cs)
+				log.Printf("Job transmit error to %v@%v: %v", session.login, session.ip, err)
+				proxyServer.removeSession(session)
 			} else {
-				s.setDeadline(cs.conn)
+				proxyServer.setDeadline(session.conn)
 			}
-		}(m)
+		}(miner)
 	}
 	log.Printf("Jobs broadcast finished %s", time.Since(start))
 }

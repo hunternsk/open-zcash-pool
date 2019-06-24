@@ -6,141 +6,149 @@ import (
 	"sync"
 
 	"github.com/jkkgbe/open-zcash-pool/merkleTree"
+	"github.com/jkkgbe/open-zcash-pool/transaction"
 	"github.com/jkkgbe/open-zcash-pool/util"
 )
-
-const maxBacklog = 3
-
-type heightDiffPair struct {
-	diff   *big.Int
-	height uint64
-}
 
 type Transaction struct {
 	Data string `json:"data"`
 	Hash string `json:"hash"`
-	Fee  int    `json:"fee"`
+	Fee  int64  `json:"fee"`
 }
 
 type CoinbaseTxn struct {
 	Data           string `json:"data"`
 	Hash           string `json:"hash"`
-	FoundersReward int    `json:"foundersreward"`
+	FoundersReward int64  `json:"foundersreward"`
 }
 
 type BlockTemplate struct {
 	sync.RWMutex
-	Version       uint32        `json:"version"`
-	PrevBlockHash string        `json:"previousblockhash"`
-	Transactions  []Transaction `json:"transactions"`
-	CoinbaseTxn   CoinbaseTxn   `json:"coinbasetxn"`
-	LongpollId    string        `json:"longpollid"`
-	Target        string        `json:"target"`
-	MinTime       int           `json:"mintime"`
-	NonceRange    string        `json:"noncerange"`
-	SigOpLimit    int           `json:"sigoplimit"`
-	SizeLimit     int           `json:"sizelimit"`
-	CurTime       uint32        `json:"curtime"`
-	Bits          string        `json:"bits"`
-	Height        int           `json:"height"`
+	Version              uint32        `json:"version"`
+	PrevBlockHash        string        `json:"previousblockhash"`
+	FinalSaplingRootHash string        `json:"finalsaplingroothash"`
+	Transactions         []Transaction `json:"transactions"`
+	CoinbaseTxn          CoinbaseTxn   `json:"coinbasetxn"`
+	LongpollId           string        `json:"longpollid"`
+	Target               string        `json:"target"`
+	MinTime              int           `json:"mintime"`
+	NonceRange           string        `json:"noncerange"`
+	SigOpLimit           int           `json:"sigoplimit"`
+	SizeLimit            int           `json:"sizelimit"`
+	CurTime              uint32        `json:"curtime"`
+	Bits                 string        `json:"bits"`
+	Height               int64         `json:"height"`
 }
 
 type Work struct {
-	JobId              string
-	Version            string
-	PrevHashReversed   string
-	MerkleRootReversed string
-	ReservedField      string
-	Time               string
-	Bits               string
-	CleanJobs          bool
-	Template           *BlockTemplate
-	// Nonce              string
-	// SolutionSize       [3]byte
-	// Solution           [1344]byte
-	// Header             [4 + 32 + 32 + 32 + 4 + 4 + 32 + 3 + 1344]byte
+	JobId                string
+	Version              string
+	PrevHashReversed     string
+	MerkleRootReversed   string
+	FinalSaplingRootHash string
+	Time                 string
+	Bits                 string
+	Target               string
+	Height               int64
+	Difficulty           *big.Int
+	CleanJobs            bool
+	Template             *BlockTemplate
+	GeneratedCoinbase    []byte
+	FeeReward            int64
 }
 
-func (s *ProxyServer) fetchWork() {
-	rpc := s.rpc()
-	t := s.currentWork()
-	var reply BlockTemplate
-	err := rpc.GetBlockTemplate(&reply)
+func (proxyServer *ProxyServer) fetchWork() {
+	rpc := proxyServer.rpc()
+	currentWork := proxyServer.currentWork()
+
+	var blockTemplate BlockTemplate
+	err := rpc.GetBlockTemplate(&blockTemplate)
 	if err != nil {
 		log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
 		return
 	}
-	// No need to update, we have fresh job
-	if t != nil && util.BytesToHex(util.ReverseBuffer(util.HexToBytes(t.PrevHashReversed))) == reply.PrevBlockHash {
+
+	// No need to update, we already have a fresh job
+	if currentWork != nil && util.ReverseHex(currentWork.PrevHashReversed) == blockTemplate.PrevBlockHash {
 		return
 	}
 
-	// generatedTxHash := CreateRawTransaction(inputs, outputs).TxHash()
-	txHashes := make([][32]byte, len(reply.Transactions)+1)
-	// txHashes[0] = util.ReverseBuffer(generatedTxHash)
-	copy(txHashes[0][:], util.HexToBytes(reply.CoinbaseTxn.Hash)[:32])
-	for i, transaction := range reply.Transactions {
-		copy(txHashes[i+1][:], util.HexToBytes(transaction.Hash)[:32])
+	var feeReward int64 = 0
+	for _, transaction := range blockTemplate.Transactions {
+		feeReward += transaction.Fee
 	}
 
-	mtBottomRow := txHashes
-	mt := merkleTree.NewMerkleTree(mtBottomRow)
-	mtr := mt.MerkleRoot()
+	coinbaseTxn, coinbaseHash := transaction.BuildCoinbaseTxn(
+		blockTemplate.Height,
+		proxyServer.config.PoolAddress,
+		blockTemplate.CoinbaseTxn.FoundersReward,
+		feeReward,
+	)
 
+	txHashes := make([][32]byte, len(blockTemplate.Transactions)+1)
+	copy(txHashes[0][:], coinbaseHash[:])
+
+	for i, transaction := range blockTemplate.Transactions {
+		copy(txHashes[i+1][:], util.ReverseBuffer(util.HexToBytes(transaction.Hash)))
+	}
+
+	var txMerkleTreeRootReversed [32]byte
+
+	if len(txHashes) > 1 {
+		txMerkleTree := merkleTree.NewMerkleTree(txHashes)
+		txMerkleTreeRootReversed = txMerkleTree.MerkleRoot()
+	} else {
+		copy(txMerkleTreeRootReversed[:], txHashes[0][:])
+	}
+
+	target, _ := new(big.Int).SetString(blockTemplate.Target, 16)
 	newWork := Work{
-		JobId:              "1",
-		Version:            util.BytesToHex(util.PackUInt32LE(reply.Version)),
-		PrevHashReversed:   util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.PrevBlockHash))),
-		MerkleRootReversed: util.BytesToHex(util.ReverseBuffer(mtr[:])),
-		ReservedField:      "0000000000000000000000000000000000000000000000000000000000000000",
-		Time:               util.BytesToHex(util.PackUInt32LE(reply.CurTime)),
-		Bits:               util.BytesToHex(util.ReverseBuffer(util.HexToBytes(reply.Bits))),
-		CleanJobs:          true,
-		Template:           &reply,
+		JobId:                util.GetHexTimestamp(),
+		Version:              util.BytesToHex(util.PackUInt32LE(blockTemplate.Version)),
+		PrevHashReversed:     util.ReverseHex(blockTemplate.PrevBlockHash),
+		MerkleRootReversed:   util.BytesToHex(txMerkleTreeRootReversed[:]),
+		FinalSaplingRootHash: util.ReverseHex(blockTemplate.FinalSaplingRootHash),
+		Time:                 util.BytesToHex(util.PackUInt32LE(blockTemplate.CurTime)),
+		Bits:                 util.ReverseHex(blockTemplate.Bits),
+		Target:               blockTemplate.Target,
+		Height:               blockTemplate.Height,
+		Difficulty:           new(big.Int).Div(util.PowLimitTest, target),
+		CleanJobs:            true,
+		Template:             &blockTemplate,
+		GeneratedCoinbase:    coinbaseTxn,
+		FeeReward:            feeReward,
 	}
 
-	// // Copy job backlog and add current one
-	// newBlock.headers[reply[0]] = heightDiffPair{
-	// 	diff:   util.TargetHexToDiff(reply[2]),
-	// 	height: height,
-	// }
-	// if t != nil {
-	// 	for k, v := range t.headers {
-	// 		if v.height > height-maxBacklog {
-	// 			newBlock.headers[k] = v
-	// 		}
-	// 	}
-	// }
-	s.work.Store(&newWork)
-	log.Printf("New block to mine on %s at height %d", rpc.Name, reply.Height)
+	proxyServer.work.Store(&newWork)
+	log.Printf("New block to mine on %s at height %d", rpc.Name, blockTemplate.Height)
 
 	// Stratum
-	if s.config.Proxy.Stratum.Enabled {
-		go s.broadcastNewJobs()
+	if proxyServer.config.Proxy.Stratum.Enabled {
+		go proxyServer.broadcastNewJobs()
 	}
 }
 
-func (w *Work) BuildHeader(noncePart1, noncePart2 string) []byte {
-	result := util.HexToBytes(w.Version)
-	result = append(result, util.HexToBytes(w.PrevHashReversed)...)
-	result = append(result, util.HexToBytes(w.MerkleRootReversed)...)
-	result = append(result, util.HexToBytes(w.ReservedField)...)
-	result = append(result, util.HexToBytes(w.Time)...)
-	result = append(result, util.HexToBytes(w.Bits)...)
+func (work *Work) BuildHeader(noncePart1, noncePart2 string) []byte {
+	result := util.HexToBytes(work.Version)
+	result = append(result, util.HexToBytes(work.PrevHashReversed)...)
+	result = append(result, util.HexToBytes(work.MerkleRootReversed)...)
+	result = append(result, util.HexToBytes(work.FinalSaplingRootHash)...)
+	result = append(result, util.HexToBytes(work.Time)...)
+	result = append(result, util.HexToBytes(work.Bits)...)
 	result = append(result, util.HexToBytes(noncePart1)...)
 	result = append(result, util.HexToBytes(noncePart2)...)
 	return result
 }
 
-func (w *Work) CreateJob() []interface{} {
+func (work *Work) CreateJob() []interface{} {
 	return []interface{}{
-		w.JobId,
-		w.Version,
-		w.PrevHashReversed,
-		w.MerkleRootReversed,
-		w.ReservedField,
-		w.Time,
-		w.Bits,
-		w.CleanJobs,
+		work.JobId,
+		work.Version,
+		work.PrevHashReversed,
+		work.MerkleRootReversed,
+		work.FinalSaplingRootHash,
+		work.Time,
+		work.Bits,
+		work.CleanJobs,
 	}
 }
